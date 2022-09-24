@@ -3,7 +3,7 @@ import json
 def main():
     with open('replay.log') as f:
         text = f.read()
-    with open('mp-replay/player_events.lua', 'w') as f:
+    with open(r'C:/Program Files/Factorio/mods/mp-replay/player_events.lua', 'w') as f:
         f.write('return {')
         first = True
         for line in text.splitlines():
