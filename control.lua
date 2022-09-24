@@ -2,79 +2,123 @@ local handler = require("event_handler")
 handler.add_lib(require("freeplay"))
 handler.add_lib(require("silo-script"))
 
-local function kind_of(obj)
-    if type(obj) ~= 'table' then return type(obj) end
-    local i = 1
-    for _ in pairs(obj) do
-      if obj[i] ~= nil then i = i + 1 else return 'table' end
-    end
-    if i == 1 then return 'table' else return 'array' end
-  end
-  
-  local function escape_str(s)
-    local in_char  = {'\\', '"', '/', '\b', '\f', '\n', '\r', '\t'}
-    local out_char = {'\\', '"', '/',  'b',  'f',  'n',  'r',  't'}
-    for i, c in ipairs(in_char) do
-      s = s:gsub(c, '\\' .. out_char[i])
-    end
-    return s
-  end
-  
-  local function num_tostring(num)
-    if num ~= num then return 'NaN' end
-    if num == 1/0 then return 'Infinity' end
-    if num == -1/0 then return '-Infinity' end
-    return tostring(num)
-  end
-  
-  local function stringify(obj, as_key)
-    local s = {}  -- We'll build the string as an array of strings to be concatenated.
-    local kind = kind_of(obj)  -- This is 'array' if it's an array or type(obj) otherwise.
-    if kind == 'array' then
-      if as_key then error('Can\'t encode array as key.') end
-      s[#s + 1] = '['
-      for i, val in ipairs(obj) do
-        if i > 1 then s[#s + 1] = ', ' end
-        s[#s + 1] = stringify(val)
-      end
-      s[#s + 1] = ']'
-    elseif kind == 'table' then
-      if as_key then error('Can\'t encode table as key.') end
-      s[#s + 1] = '{'
-      for k, v in pairs(obj) do
-        if #s > 1 then s[#s + 1] = ', ' end
-        s[#s + 1] = stringify(k, true)
-        s[#s + 1] = ':'
-        s[#s + 1] = stringify(v)
-      end
-      s[#s + 1] = '}'
-    elseif kind == 'string' then
-      return '"' .. escape_str(obj) .. '"'
-    elseif kind == 'number' then
-      if as_key then return '"' .. num_tostring(obj) .. '"' end
-      return num_tostring(obj)
-    elseif kind == 'boolean' then
-      return tostring(obj)
-    elseif kind == 'nil' then
-      return 'null'
-    else
-      error('Unjsonifiable type: ' .. kind .. '.')
-    end
-    return table.concat(s)
-  end
+local player_cursor_stacks = {}
+local player_inventories = {}
+local player_selected_entities = {}
 
 local function slog(table)
-    log("rlog: " .. serpent.dump(table))
+    log("rlog: " .. serpent.line(table))
 end
 
 script.on_event(defines.events.on_player_mined_entity,
-            function(event)
-                slog({event_type="on_player_mined_entity",
-                tick=event.tick,
-                player_index=event.player_index,
-                position=event.entity.position,
-                name=event.entity.name,
-                type=event.entity.type})
-                
+    function(event)
+        slog({event_type="on_player_mined_entity",
+        tick=event.tick,
+        player_index=event.player_index,
+        position=event.entity.position,
+        name=event.entity.name,
+        type=event.entity.type})
+        
+    end
+)
+
+script.on_event(defines.events.on_built_entity,
+    function(event)
+        local ce = event.created_entity
+        local e = {event_type="on_built_entity",
+        tick=event.tick,
+        player_index=event.player_index,
+        position=ce.position,
+        name=ce.name,
+        type=ce.type,
+        direction=ce.direction}
+        local type = ce.type
+        if ce.type == "entity-ghost" then
+            e.ghost_name = ce.ghost_name
+            type = ce.ghost_type
+        end
+        if type == "underground-belt" then
+            e.belt_to_ground_type = ce.belt_to_ground_type
+        elseif type == "assembling-machine" then
+            e.recipe = ce.get_recipe()
+        elseif type == "container" then
+            local inv = ce.get_inventory(defines.inventory.chest)
+            ok, err = pcall(function() e.bar = inv.get_bar() end)
+            if not ok then
+                game.print(err.. " " .. serpent.line(e))
             end
-        )
+            e.bar = inv.get_bar()
+        elseif type == "item-entity" then
+            e.stack = event.stack
+        end
+        slog(e)
+        
+    end
+)
+
+script.on_event(defines.events.on_player_cursor_stack_changed,
+    function(event)
+        local player = game.get_player(event.player_index)
+        local cs = player.cursor_stack
+        if player.cursor_stack.valid_for_read and player.cursor_stack.type == "item" then
+            local old_stack = player_cursor_stacks[event.player_index]
+            if old_stack == nil or old_stack.name ~= cs.name then
+                player_cursor_stacks[event.player_index] = {name=cs.name, count=cs.count}
+            else
+                if cs.count ~= old_stack.count then
+                    if cs.count < old_stack.count then
+                        if player.selected ~= nil and player.selected.type ~= "resource" then
+                            slog({event_type="player_dropped",
+                            tick=event.tick,
+                            player_index=event.player_index,
+                            position=player.selected.position,
+                            entity_name=player.selected.name,
+                            item_name=cs.name,
+                            count=old_stack.count-cs.count,
+                            })
+                        end
+                    end
+                end
+                player_cursor_stacks[event.player_index] = {name=cs.name, count=cs.count}
+            end
+        else
+            player_cursor_stacks[event.player_index] = nil
+        end 
+    end
+)
+
+
+script.on_event(defines.events.on_player_mined_entity,
+    function(event)
+        slog({event_type="on_player_mined_entity",
+        tick=event.tick,
+        player_index=event.player_index,
+        position=event.entity.position,
+        name=event.entity.name,
+        type=event.entity.type})
+        
+    end
+)
+
+script.on_event(defines.events.on_gui_closed,
+function(event)
+    if event.gui_type == defines.gui_type.entity then
+        if event.entity.type == "assembling-machine" then
+            local recipe = event.entity.get_recipe()
+            slog({event_type="set_recipe",
+            tick=event.tick,
+            player_index=event.player_index,
+            position=event.entity.position,
+            name=event.entity.name,
+            type=event.entity.type,
+            recipe=recipe and recipe.name})
+        end
+    end
+end
+)
+
+script.on_event(defines.events.on_player_main_inventory_changed,
+function(event)
+    -- TBD
+end
+)
