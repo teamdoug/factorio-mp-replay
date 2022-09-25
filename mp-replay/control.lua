@@ -59,6 +59,11 @@ local toggle_ignore_player = function(id, state, player_flow)
             scale = 2,
         }
     end
+    for _, player in pairs(game.players) do
+        if player.gui.screen.mpr_main_frame then
+            player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_player_flow["mpr_player_flow_"..id].mpr_player_toggle.state = state
+        end
+    end
 end
 
 script.on_init(function()
@@ -157,6 +162,14 @@ script.on_event(defines.events.on_gui_click, function(event)
         event.element.parent.parent["mpr_player_flow"].visible = true
     elseif event.element.name == "mpr_pause" then
         global.paused = event.element.state
+        if global.paused then
+            game.print(game.get_player(event.player_index).name .. " paused the game")
+        else
+            game.print(game.get_player(event.player_index).name .. " unpaused the game")
+        end
+        for _, player in pairs(game.players) do
+            player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_pause.state = event.element.state
+        end
     elseif event.element.name == "mpr_player_toggle" then
         local player_id = event.element.tags.id
         toggle_ignore_player(player_id, event.element.state, event.element.parent.parent)
@@ -168,19 +181,27 @@ script.on_event(defines.events.on_gui_click, function(event)
             return
         end
         toggle_ignore_player(new_id, true, player_flow)
-        toggle_ignore_player(current_id, false, player_flow)
+        if current_id then
+            toggle_ignore_player(current_id, false, player_flow)
+        end
         if global.current_reversed_player_map[new_id] then
             global.current_player_map[global.current_reversed_player_map[new_id]] = nil
         end
         global.current_player_map[event.player_index] = new_id
-        global.current_reversed_player_map[current_id] = nil
+        if current_id then
+            global.current_reversed_player_map[current_id] = nil
+        end
         global.current_reversed_player_map[new_id] = event.player_index
-        for i=1,8 do
-            local ocur = player_flow["mpr_player_flow_"..i]["mpr_current_player"]
-            if global.current_reversed_player_map[i] then
-                ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
-            else
-                ocur.caption = ""
+        for _, player in pairs(game.players) do
+
+            for i=1,8 do
+                local ocur = player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_player_flow["mpr_player_flow_"..i].mpr_current_player
+                if global.current_reversed_player_map[i] then
+                    ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
+                else
+                    ocur.caption = ""
+                end
+                
             end
         end
 
@@ -195,6 +216,9 @@ script.on_event(defines.events.on_gui_click, function(event)
     elseif event.element.name == "mpr_speed_set" then
         global.speed = tonumber(event.element.parent["mpr_speed"].text)
         game.print(game.get_player(event.player_index).name .. " set speed to " .. global.speed)
+        for _, player in pairs(game.players) do
+            player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_controls_flow.mpr_speed.text = event.element.parent["mpr_speed"].text
+        end
     end
 end)
 
