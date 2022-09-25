@@ -106,8 +106,7 @@ script.on_event(defines.events.on_player_created, function(event)
 
     local screen_element = player.gui.screen
     local main_frame = screen_element.add{type="frame", name="mpr_main_frame", caption="MP Replay"}
-    local content_frame = main_frame.add{type="frame", name="mpr_content_frame", direction="vertical"}
-    local main_flow = content_frame.add{type="flow", name="mpr_main_flow", direction="vertical"}
+    local main_flow = main_frame.add{type="flow", name="mpr_main_flow", direction="vertical"}
     main_flow.add{type="checkbox", name="mpr_pause", caption="Paused", state=global.paused}
     local controls_flow = main_flow.add{type="flow", name="mpr_controls_flow", direction="horizontal"}
     controls_flow.add{type="label", name="mpr_speed_label", caption="Speed"}
@@ -120,8 +119,8 @@ script.on_event(defines.events.on_player_created, function(event)
     player_header_flow.add{type="label", name="mpr_players_label", caption="Players"}
     player_header_flow.add{type="button", name="mpr_players_hide", caption="Hide"}
     player_header_flow.add{type="button", name="mpr_players_show", caption="Show", visible=false}
-    main_flow.add{type="label", name="mpr_players_label2", caption="Me    Ignored"}
     local player_flow = main_flow.add{type="flow", name="mpr_player_flow", direction="vertical"}
+    player_flow.add{type="label", name="mpr_players_label2", caption="Me    Ignored"}
     for i=1,8 do
         local this_flow = player_flow.add{type="flow", name="mpr_player_flow_"..i, direction="horizontal"}
         local cb = this_flow.add{type="button", name="mpr_player_set", tags={id=i}}
@@ -256,7 +255,6 @@ end
 local player_gave = function(event)
     -- If the giving player is a real player or the receiving player isn't a real player, do nothing.
     if global.current_reversed_player_map[event.player_index] or not global.current_reversed_player_map[event.to_player_index] then
-        game.print("skipping give from " .. event.player_index .. " to " .. event.to_player_index)
         return true
     end
     local player = game.get_player(global.current_reversed_player_map[event.to_player_index])
