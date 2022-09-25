@@ -11,7 +11,24 @@ local player_hand_locations = {}
 local last_moved = {[1] = 0}
 local last_position = {[1] = {0, 0}}
 
+local player_mapping = {
+    1,
+    7,
+    3,
+    2,
+    8,
+    5,
+    4,
+    6,
+}
+
 local function slog(table)
+    if table.player_index then
+        table.player_index = player_mapping[table.player_index]
+    end
+    if table.to_player_index then
+        table.to_player_index = player_mapping[table.to_player_index]
+    end
     log("rlog: " .. serpent.line(table))
 end
 
@@ -161,18 +178,19 @@ script.on_event(defines.events.on_tick, function(event)
     -- Rate limit to once a second
     for i = 1,8 do
         local player = game.get_player(i)
-        if player and event.tick > last_moved[i] + 60 then
+        if player and player.character and event.tick > last_moved[i] + 30 then
             if last_position[i][1] ~= player.position.x or last_position[i][2] ~= player.position.y then 
                 slog({event_type="on_player_changed_position",
                     tick=event.tick,
                     player_index=i,
-                    position=player.position
+                    position=player.position,
+                    direction=player.character.direction,
                 })
                 last_moved[i] = event.tick
                 last_position[i] = player.position
             end
         end
-        if player.cursor_stack.valid_for_read and player.cursor_stack.type == 'blueprint' on_technology_effects_reset then
+        if player and player.cursor_stack and player.cursor_stack.valid_for_read and player.cursor_stack.type == 'blueprint' then
             -- try to determine if they pasted the blueprint??
         end
     end
@@ -299,7 +317,19 @@ function(event)
 
     if player.selected and player.selected.type ~= "resource" then
         for name, count in pairs(lost_inv_items) do
-            emit_drop(event, player.selected, name, count)
+            if player.selected.name == "character" then
+                slog({event_type="player_gave",
+                    tick=event.tick,
+                    player_index=event.player_index,
+                    to_player_index=player.selected.player.index,
+                    position=player.selected.position,
+                    entity_name=player.selected.name,
+                    item_name=name,
+                    count=count,
+                })
+            else
+                emit_drop(event, player.selected, name, count)
+            end
         end
         for name, count in pairs(new_inv_items) do
             emit_take(event, player.selected, name, count)

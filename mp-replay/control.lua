@@ -1,54 +1,202 @@
 local player_events = require("player_events")
 
--- Players who are currently playing e.g. {1, 3}
-local ignored_players = {2}
-
--- Player map
--- 1 Ximoltus / mysticamber
--- 2 macros4200 / heartosis
--- 3 Factoribert / Cyclo
--- 4 P1tta / Phreadward
--- 5 Cobai / thedoh
--- 6 lort_Z / typical_guy / thePiedPiper
--- 7 ardoRic / Franqly / RuneBoggler
--- 8 seky16 / JeHor
-
-
--- Set to "false" if you want to queue research yourself
-local auto_queue_research = true
-
--- Pause other players with
--- /c __mp-replay__ global.paused=true
-
--- Unpause
--- /c __mp-replay__ global.paused=false
-
-
--- Set other player speed (1 is default, 0.5 is half, 2 is double, etc)
--- /c __mp-replay__ global.speed=0.5
-
 
 -- For testing what's going wrong
 local debug = false
 
 
--- Don't go any lower...
-
 local events_to_run = {}
 
-local ignored_player_map = {}
-for _, id in ipairs(ignored_players) do
-    ignored_player_map[id] = true
+local player_names = {
+    'Cyclomactic',
+    'Phredward',
+    'mysticamber',
+    'Franqly/RuneBoggler',
+    'typical_guy/thePiedPiper',
+    'JeHor',
+    'heartosis',
+    'thedoh'
+}
+
+local player_colors = {
+    {1,0,0},
+    {1,.4,0},
+    {1,1,0},
+    {0,1,0},
+    {0,1,1},
+    {.7,.5,1},
+    {1,0,1},
+    {1,1,1}
+}
+
+local toggle_ignore_player = function(id, state, player_flow)
+    if global.ignored_player_map[id] == state then
+        return
+    end
+    if player_flow then
+        player_flow["mpr_player_flow_"..id]["mpr_player_toggle"].state = state
+    end
+    global.ignored_player_map[id] = state
+    if state then
+        rendering.destroy(global.player_labels[id])
+        global.player_entities[id].destroy()
+    else
+        local surf = game.get_surface("nauvis")
+        global.player_entities[id] = surf.create_entity{
+            position=global.player_positions[id],
+            direction=global.player_directions[id],
+            name="character",
+            force="player",
+            }
+        global.player_entities[id].color = player_colors[id]
+        global.player_labels[id] = rendering.draw_text{
+            text = player_names[id],
+            surface = surf,
+            target = global.player_entities[id],
+            target_offset = {0, -2.5},
+            alignment = "center",
+            color = player_colors[id],
+            scale = 2,
+        }
+    end
 end
+
 script.on_init(function()
    global.tick = 0
    global.mp_event_index = 1
    global.player_entities = {}
+   global.ignored_player_map = {}
+   global.player_positions = {}
+   global.player_directions = {}
+   global.player_labels = {}
    for i=1,8 do
-    global.player_entities[i] = game.get_surface("nauvis").create_entity{position={5,-5}, name="character", force="player"}
+    global.ignored_player_map[i] = true
+    global.player_positions[i] = {0, 0}
+    global.player_directions[i] = 0
+    toggle_ignore_player(i, false, nil)
    end
-   global.paused = false
+   global.paused = true
    global.speed = 1
+   global.players = {}
+   -- player index to id of the player they're playing as
+   global.current_player_map = {}
+   global.current_reversed_player_map = {}
+end)
+
+
+script.on_event(defines.events.on_player_created, function(event)
+    local player = game.get_player(event.player_index)
+    local name = player.name:lower()
+    for i=1,8 do
+        local check_names = player_names[i]:lower()
+        for check_name in string.gmatch(check_names, "[a-z_]+") do
+            if check_name == name then
+                toggle_ignore_player(i, true, nil)
+                global.current_player_map[event.player_index] = i
+                global.current_reversed_player_map[i] = event.player_index
+                game.print(player.name .. " joined. Ignoring player " .. i .. ": " .. player_names[i])
+            end
+        end
+    end
+
+    global.players[event.player_index] = {
+        controls_visible = true,
+        players_visible = true
+    }
+
+    local screen_element = player.gui.screen
+    local main_frame = screen_element.add{type="frame", name="mpr_main_frame", caption="MP Replay"}
+    local content_frame = main_frame.add{type="frame", name="mpr_content_frame", direction="vertical"}
+    local main_flow = content_frame.add{type="flow", name="mpr_main_flow", direction="vertical"}
+    main_flow.add{type="checkbox", name="mpr_pause", caption="Paused", state=global.paused}
+    local controls_flow = main_flow.add{type="flow", name="mpr_controls_flow", direction="horizontal"}
+    controls_flow.add{type="label", name="mpr_speed_label", caption="Speed"}
+    local speed = controls_flow.add{type="textfield", name="mpr_speed", numeric=true, allow_decimal=true, lose_focus_on_confirm=true, text="1"}
+    speed.style.maximal_width=50
+    speed.style.minimal_width=50
+    local speed_set = controls_flow.add{type="button", name="mpr_speed_set", caption="✓"}
+    speed_set.style.size = {40, 30}
+    local player_header_flow = main_flow.add{type="flow", name="mpr_player_header_flow", direction="horizontal"}
+    player_header_flow.add{type="label", name="mpr_players_label", caption="Players"}
+    player_header_flow.add{type="button", name="mpr_players_hide", caption="Hide"}
+    player_header_flow.add{type="button", name="mpr_players_show", caption="Show", visible=false}
+    main_flow.add{type="label", name="mpr_players_label2", caption="Me    Ignored"}
+    local player_flow = main_flow.add{type="flow", name="mpr_player_flow", direction="vertical"}
+    for i=1,8 do
+        local this_flow = player_flow.add{type="flow", name="mpr_player_flow_"..i, direction="horizontal"}
+        local cb = this_flow.add{type="button", name="mpr_player_set", tags={id=i}}
+        this_flow.add{type="label", name="spacer", caption="   "}
+        cb.style.size = {13, 13}
+        cb.style.top_margin = 5
+        this_flow.add{type="checkbox", name="mpr_player_toggle", tags={id=i}, caption=(i .. ": " .. player_names[i]), state=global.ignored_player_map[i]}
+        local player_caption = ""
+        if global.current_reversed_player_map[i] then
+            player_caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
+        end
+        this_flow.add{type="label", name="mpr_current_player", tags={id=i}, caption=player_caption}
+    end
+    local toggle_all_flow = player_flow.add{type="flow", name="mpr_player_toggle_all_flow", direction="horizontal"}
+    toggle_all_flow.add{type="button", name="mpr_ignore_all_players", caption="Ignore All"}
+    toggle_all_flow.add{type="button", name="mpr_activate_all_players", caption="Activate All"}
+end)
+
+
+script.on_event(defines.events.on_gui_click, function(event)
+    if event.element.name == "mpr_players_hide" then
+        local player_global = global.players[event.player_index]
+        player_global.players_visible = false
+
+        event.element.visible = false
+        event.element.parent["mpr_players_show"].visible = true
+        event.element.parent.parent["mpr_player_flow"].visible = false
+    elseif event.element.name == "mpr_players_show" then
+        local player_global = global.players[event.player_index]
+        player_global.players_visible = true
+
+        event.element.visible = false
+        event.element.parent["mpr_players_hide"].visible = true
+        event.element.parent.parent["mpr_player_flow"].visible = true
+    elseif event.element.name == "mpr_pause" then
+        global.paused = event.element.state
+    elseif event.element.name == "mpr_player_toggle" then
+        local player_id = event.element.tags.id
+        toggle_ignore_player(player_id, event.element.state, event.element.parent.parent)
+    elseif event.element.name == "mpr_player_set" then
+        local player_flow = event.element.parent.parent
+        local new_id = event.element.tags.id
+        local current_id = global.current_player_map[event.player_index]
+        if new_id == current_id then
+            return
+        end
+        toggle_ignore_player(new_id, true, player_flow)
+        toggle_ignore_player(current_id, false, player_flow)
+        if global.current_reversed_player_map[new_id] then
+            global.current_player_map[global.current_reversed_player_map[new_id]] = nil
+        end
+        global.current_player_map[event.player_index] = new_id
+        global.current_reversed_player_map[current_id] = nil
+        global.current_reversed_player_map[new_id] = event.player_index
+        for i=1,8 do
+            local ocur = player_flow["mpr_player_flow_"..i]["mpr_current_player"]
+            if global.current_reversed_player_map[i] then
+                ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
+            else
+                ocur.caption = ""
+            end
+        end
+
+    elseif event.element.name == "mpr_ignore_all_players" then
+        for i=1,8 do
+            toggle_ignore_player(i, true, event.element.parent.parent)
+        end
+    elseif event.element.name == "mpr_activate_all_players" then
+        for i=1,8 do
+            toggle_ignore_player(i, false, event.element.parent.parent)
+        end
+    elseif event.element.name == "mpr_speed_set" then
+        global.speed = tonumber(event.element.parent["mpr_speed"].text)
+        game.print(game.get_player(event.player_index).name .. " set speed to " .. global.speed)
+    end
 end)
 
 local player_dropped = function(event)
@@ -105,6 +253,22 @@ local player_took = function(event)
     return true
 end
 
+local player_gave = function(event)
+    -- If the giving player is a real player or the receiving player isn't a real player, do nothing.
+    if global.current_reversed_player_map[event.player_index] or not global.current_reversed_player_map[event.to_player_index] then
+        game.print("skipping give from " .. event.player_index .. " to " .. event.to_player_index)
+        return true
+    end
+    local player = game.get_player(global.current_reversed_player_map[event.to_player_index])
+    local count = player.get_main_inventory().insert({name=event.item_name, count=event.count})
+    if count < event.count then
+        player.print(player_names[event.player_index] .. " tried to give you " .. event.item_name .. " but your inventory was full")
+    else
+        player.print(player_names[event.player_index] .. " gave you " .. event.count .. " ".. event.item_name)
+    end
+    return true
+end
+
 local mine_entity = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
     if entity == nil then
@@ -136,6 +300,7 @@ local set_recipe = function(event)
     return true
 end
 
+
 local build_entity = function(event)
     entity = game.surfaces["nauvis"].create_entity{
         name = event.name,
@@ -153,7 +318,7 @@ local build_entity = function(event)
 end
 
 local on_research_started = function(event)
-    if not auto_queue_research then
+    if global.ignored_player_map[5] then
         return true
     end
     return game.forces.player.add_research(event.name)
@@ -161,6 +326,7 @@ end
 
 local on_player_changed_position = function(event)
     global.player_entities[event.player_index].teleport(event.position)
+    global.player_entities[event.player_index].direction = event.direction
     return true
 end
 
@@ -179,7 +345,11 @@ script.on_event(defines.events.on_tick, function(tick_event)
         end
         while global.mp_event_index <= #player_events and tick >= player_events[global.mp_event_index].tick do
             local ev = player_events[global.mp_event_index]
-            if not ignored_player_map[ev.player_index] then
+            if ev.event_type == "on_player_changed_position" then
+                global.player_positions[ev.player_index] = ev.position
+                global.player_directions[ev.player_index] = ev.direction
+            end
+            if not global.ignored_player_map[ev.player_index] then
                 table.insert(events_to_run, ev)
             end
             global.mp_event_index = global.mp_event_index + 1
@@ -201,6 +371,8 @@ script.on_event(defines.events.on_tick, function(tick_event)
                     noerr, success = pcall(player_dropped, event)
                 elseif event.event_type == "player_took" then
                     noerr, success = pcall(player_took, event)
+                elseif event.event_type == "player_gave" then
+                    noerr, success = pcall(player_gave, event)
                 elseif event.event_type == "set_recipe" then
                     noerr, success = pcall(set_recipe, event)
                 elseif event.event_type == "on_research_started" then
