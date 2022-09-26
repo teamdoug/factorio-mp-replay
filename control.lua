@@ -11,10 +11,12 @@ local player_hand_locations = {}
 local last_moved = {[1] = 0}
 local last_position = {[1] = {0, 0}}
 
+local debug_player = 0
+
 local player_mapping = {
-    1,
-    7,
     3,
+    7,
+    1,
     2,
     8,
     5,
@@ -49,6 +51,7 @@ script.on_event(defines.events.on_player_mined_entity,
         
     end
 )
+
 
 script.on_event(defines.events.on_built_entity,
     function(event)
@@ -210,6 +213,71 @@ script.on_event(defines.events.on_entity_settings_pasted, function(event)
     end
 end)
 
+
+script.on_event(defines.events.on_player_crafted_item,
+    function(event)
+        local player = game.get_player(event.player_index)
+        -- prerequisite doesn't exist in 1.0.0 :(
+        if player.crafting_queue[1].prerequisite then
+            return
+        end
+        -- can remove after we get off 1.0.0 if we're still doing this...
+        for i = 2,#player.crafting_queue do
+            local recipe = game.recipe_prototypes[player.crafting_queue[i].recipe]
+            for _, ing in ipairs(recipe.ingredients) do
+                if ing.name == event.item_stack.name then
+                    return
+                end
+            end
+        end
+        if event.player_index == debug_player then
+            log(event.tick .. " craft " .. event.item_stack.count .. " " .. event.item_stack.name)
+        end
+        local inv = player_inventories[event.player_index]
+        if not inv[event.item_stack.name] then
+            inv[event.item_stack.name] = event.item_stack.count
+        else
+            inv[event.item_stack.name] = inv[event.item_stack.name] + event.item_stack.count
+        end
+    end
+)
+
+script.on_event(defines.events.on_pre_player_crafted_item,
+    function(event)
+        local inv = player_inventories[event.player_index]
+        local curs = player_cursor_stacks[event.player_index]
+        for i = 1,#event.items do
+            local stack = event.items[i]
+            if event.player_index == debug_player then
+                log(event.tick .. " used " .. stack.count .. " " .. stack.name)
+            end
+            local left = stack.count
+            if inv[stack.name] then
+                if inv[stack.name] > stack.count then
+                    inv[stack.name] = inv[stack.name] - stack.count
+                    left = 0
+                else
+                    left = stack.count - inv[stack.name]
+                    inv[stack.name] = nil
+                end 
+            end
+            if left > 0 and curs and curs.name == stack.name then
+                if curs.count < left then                    
+                    left = left - curs.count
+                    player_cursor_stacks[event.player_index] = nil
+                else
+                    curs.count = curs.count - left
+                    left = 0
+                end
+            end
+            if left > 0 then
+                game.print(game.get_player(event.player_index).name .. " tried crafting " ..
+                    event.recipe.name .. " but was missing " .. left .. " ".. stack.name)
+            end
+        end
+    end
+)
+
 script.on_event({defines.events.on_player_main_inventory_changed, defines.events.on_player_cursor_stack_changed, defines.events.on_player_fast_transferred},
 function(event)
     -- we could actually use the info on fast transfer events...
@@ -219,6 +287,9 @@ function(event)
     cur_inv = flatten_inventory(cur_inv)
     local new_inv_items = {}
     local lost_inv_items = {}
+    if event.player_index == debug_player then
+        log("old_inv " .. serpent.line(old_inv))
+    end
 
     old_hand = player_hand_locations[event.player_index]
     cur_hand = nil
@@ -259,6 +330,9 @@ function(event)
     local cs = player.cursor_stack
     local new_curs_items = {}
     local lost_curs_items = {}
+    if event.player_index == debug_player then
+        log("old_stack " .. serpent.line(old_stack))        
+    end
 
     if cs.valid_for_read then
         if old_stack == nil then
@@ -315,6 +389,17 @@ function(event)
         end
     end
 
+    for name, count in pairs(lost_inv_items) do
+        if event.player_index == debug_player then
+            log(event.tick .. " lost " .. count .. " " .. name)
+        end
+    end
+    for name, count in pairs(new_inv_items) do
+        if event.player_index == debug_player then
+            log(event.tick .. " gained " .. count .. " " .. name)
+        end
+    end
+
     if player.selected and player.selected.type ~= "resource" then
         for name, count in pairs(lost_inv_items) do
             if player.selected.name == "character" then
@@ -346,6 +431,11 @@ function(event)
         end
     else
         -- dropping on ground?
+    end
+
+    if event.player_index == debug_player then
+        log("new_inv " .. serpent.line(cur_inv))
+        log("new_stack " .. serpent.line(player_cursor_stacks[event.player_index]))        
     end
 
     player_inventories[event.player_index] = cur_inv

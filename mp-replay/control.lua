@@ -90,6 +90,9 @@ end)
 
 
 script.on_event(defines.events.on_player_created, function(event)
+    if debug then  
+        game.print("heartosis left debug mode on. yell at him")
+    end
     local player = game.get_player(event.player_index)
     local name = player.name:lower()
     for i=1,8 do
@@ -142,6 +145,18 @@ script.on_event(defines.events.on_player_created, function(event)
     local toggle_all_flow = player_flow.add{type="flow", name="mpr_player_toggle_all_flow", direction="horizontal"}
     toggle_all_flow.add{type="button", name="mpr_ignore_all_players", caption="Ignore All"}
     toggle_all_flow.add{type="button", name="mpr_activate_all_players", caption="Activate All"}
+    for _, player in pairs(game.players) do
+
+        for i=1,8 do
+            local ocur = player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_player_flow["mpr_player_flow_"..i].mpr_current_player
+            if global.current_reversed_player_map[i] then
+                ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
+            else
+                ocur.caption = ""
+            end
+            
+        end
+    end
 end)
 
 
@@ -249,7 +264,11 @@ local player_took = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
     -- If they take from something that doesn't exist, fine...
     -- or if they're picking up the entity...
-    if entity == nil or entity.name == event.entity_name then
+    if entity == nil or entity.name == event.item_name then
+        if false and debug then
+            game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
+                event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but the entity didn't exist")
+        end
         return true
     end
     -- We could also try to detect taking from inputs of an assembling-machine based on types...
@@ -260,16 +279,41 @@ local player_took = function(event)
         else
             inv = entity.get_inventory(defines.inventory.assembling_machine_output)
         end
-        inv.remove({name=event.item_name, count=event.count})
+        local removed = inv.remove({name=event.item_name, count=event.count})
+        if removed < event.count then
+            if false and debug then
+                game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
+                    event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but only got " .. removed)
+            end
+            event.count = event.count - removed
+            return false
+        end
     elseif entity.type == "container" then
         local inv = entity.get_inventory(defines.inventory.chest)
-        inv.remove({name=event.item_name, count=event.count})
+        local removed = inv.remove({name=event.item_name, count=event.count})
+        if removed < event.count then
+            if false and debug then
+                game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
+                    event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but only got " .. removed)
+            end
+            event.count = event.count - removed
+            return false
+        end
+        
     elseif entity.type == "lab" then
         local inv = entity.get_inventory(defines.inventory.assembling_machine_input)
-        inv.remove({name=event.item_name, count=event.count})
+        local removed = inv.remove({name=event.item_name, count=event.count})
+        if removed < event.count then
+            if false and debug then
+                game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
+                    event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but only got " .. removed)
+            end
+            event.count = event.count - removed
+            return false
+        end
     elseif entity.type == "simple-entity" or entity.type == "tree" then
     else
-        if game.debug then
+        if debug then
             game.print("take " .. event.entity_name)
         end
     end
@@ -324,6 +368,24 @@ end
 
 
 local build_entity = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity and entity.name == event.name and (not event.ghost_name or entity.ghost_name == event.ghost_name) then
+        return true
+    end
+    local build_check_type = defines.build_check_type.manual
+    if event.ghost_name then
+        build_check_type = defines.build_check_type.manual_ghost
+    end
+    if not game.surfaces["nauvis"].can_place_entity{
+        name = event.name,
+        position = event.position,
+        direction = event.direction,
+        force = "player",
+        inner_name = event.ghost_name,
+        build_check_type = build_check_type,
+    } then
+        return false
+    end
     entity = game.surfaces["nauvis"].create_entity{
         name = event.name,
         position = event.position,
@@ -417,7 +479,10 @@ script.on_event(defines.events.on_tick, function(tick_event)
                             game.print("failed to execute event: " .. serpent.line(event))
                         end
                     end
-                    table.insert(new_events_to_run, event)
+                    -- Try again for up to 30 secs
+                    if tick - event.tick < 30 * 60 then
+                        table.insert(new_events_to_run, event)
+                    end
                 end
             end
         end
