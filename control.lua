@@ -112,11 +112,16 @@ script.on_event(defines.events.on_player_mined_entity,
 
 script.on_event(defines.events.on_player_rotated_entity,
     function(event)
+        local belt_to_ground_type
+        if event.entity.type == "underground-belt" then
+            belt_to_ground_type = event.entity.belt_to_ground_type
+        end
         slog({event_type="on_player_rotated_entity",
         tick=event.tick,
         player_index=event.player_index,
         position=event.entity.position,
         direction=event.entity.direction,
+        belt_to_ground_type=belt_to_ground_type,
         name=event.entity.name,
         type=event.entity.type})
     end

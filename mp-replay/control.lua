@@ -76,7 +76,7 @@ script.on_init(function()
    global.player_labels = {}
    for i=1,8 do
     global.ignored_player_map[i] = true
-    global.player_positions[i] = {0, 0}
+    global.player_positions[i] = {5, -5}
     global.player_directions[i] = 0
     toggle_ignore_player(i, false, nil)
    end
@@ -86,6 +86,7 @@ script.on_init(function()
    -- player index to id of the player they're playing as
    global.current_player_map = {}
    global.current_reversed_player_map = {}
+   global.entity_highlights = {}
 end)
 
 
@@ -353,7 +354,11 @@ local rotate_entity = function(event)
     if entity == nil then
         return true
     end
-    entity.direction = event.direction
+    if entity.type == "underground-belt" and event.belt_to_ground_type ~= entity.belt_to_ground_type then
+        entity.rotate()
+    else
+        entity.direction = event.direction
+    end
     return true
 end
 
@@ -398,8 +403,25 @@ local build_entity = function(event)
         stack = event.stack,
         inner_name = event.ghost_name
     }
+    if global.current_reversed_player_map[event.player_index] then
+        local b = entity.selection_box
+        script.register_on_entity_destroyed(entity)
+        global.entity_highlights[entity.unit_number] = rendering.draw_rectangle{
+            left_top=b.left_top,
+            right_bottom=b.right_bottom,
+            color={0,.1,0,.1},
+            filled=true,
+            surface=game.surfaces["nauvis"]}
+    end
     return entity ~= nil
 end
+
+script.on_event(defines.events.on_entity_destroyed, function(event)
+    if global.entity_highlights[event.unit_number] then
+        rendering.destroy(global.entity_highlights[event.unit_number])
+        global.entity_highlights[event.unit_number] = nil
+    end
+end)
 
 local on_research_started = function(event)
     if global.ignored_player_map[5] then
@@ -415,6 +437,11 @@ local on_player_changed_position = function(event)
 end
 
 script.on_event(defines.events.on_tick, function(tick_event)
+    for _, index in pairs(global.current_player_map) do
+        if not global.ignored_player_map[index] then
+            game.surfaces[1].daytime = 0
+        end
+    end
     if global.paused then
         return
     end
