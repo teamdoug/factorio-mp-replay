@@ -100,10 +100,11 @@ end)
 
 
 script.on_event(defines.events.on_player_created, function(event)
-    if debug then  
-        game.print("heartosis left debug mode on. yell at him")
-    end
     local player = game.get_player(event.player_index)
+    if debug and player.name ~= "heartosis" then  
+        debug = false
+    end
+    local extra_speed_control = player.name == "heartosis"
     local name = player.name:lower()
     for i=1,8 do
         local check_names = player_names[i]:lower()
@@ -127,12 +128,28 @@ script.on_event(defines.events.on_player_created, function(event)
     local main_flow = main_frame.add{type="flow", name="mpr_main_flow", direction="vertical"}
     main_flow.add{type="checkbox", name="mpr_pause", caption="Paused", state=global.paused}
     local controls_flow = main_flow.add{type="flow", name="mpr_controls_flow", direction="horizontal"}
-    controls_flow.add{type="label", name="mpr_speed_label", caption="Speed"}
-    local speed = controls_flow.add{type="textfield", name="mpr_speed", numeric=true, allow_decimal=true, lose_focus_on_confirm=true, text="1"}
-    speed.style.maximal_width=50
-    speed.style.minimal_width=50
+    controls_flow.add{type="label", name="mpr_bot_speed_label", caption="Bot Speed"}
+    local bot_speed = controls_flow.add{type="textfield", name="mpr_bot_speed", numeric=true, allow_decimal=true, lose_focus_on_confirm=true, text="1"}
+    bot_speed.style.maximal_width=50
+    bot_speed.style.minimal_width=50
     local speed_set = controls_flow.add{type="button", name="mpr_speed_set", caption="✓"}
     speed_set.style.size = {40, 30}
+    if extra_speed_control then
+        local speed_flow = main_flow.add{type="flow", name="speed", direction="horizontal"}
+        local a = speed_flow.add{type="button", name="pause", caption="‖"}
+        a.style.maximal_width=35
+        a.style.minimal_width=35
+        local b = speed_flow.add{type="button", name="play", caption="▶"}
+        b.style.maximal_width=40
+        b.style.minimal_width=40
+        local c = speed_flow.add{type="button", name="fast", caption="▶▶"}
+        c.style.maximal_width=60
+        c.style.minimal_width=60
+        local d = speed_flow.add{type="button", name="fastest", caption="▶▶▶"}
+        d.style.maximal_width=70
+        d.style.minimal_width=70
+        global.tick_label = controls_flow.add{type="label", name="tick_label", caption="0"}
+    end
     local player_header_flow = main_flow.add{type="flow", name="mpr_player_header_flow", direction="horizontal"}
     player_header_flow.add{type="label", name="mpr_players_label", caption="Players"}
     player_header_flow.add{type="button", name="mpr_players_hide", caption="Hide"}
@@ -171,7 +188,18 @@ end)
 
 
 script.on_event(defines.events.on_gui_click, function(event)
-    if event.element.name == "mpr_players_hide" then
+    if event.element.name == "pause" then
+        game.tick_paused = true
+    elseif event.element.name == "play" then
+        game.speed = 1
+        game.tick_paused = false
+    elseif event.element.name == "fast" then
+        game.speed = 8
+        game.tick_paused = false
+    elseif event.element.name == "fastest" then
+        game.speed = 64
+        game.tick_paused = false
+    elseif event.element.name == "mpr_players_hide" then
         local player_global = global.players[event.player_index]
         player_global.players_visible = false
 
@@ -188,9 +216,9 @@ script.on_event(defines.events.on_gui_click, function(event)
     elseif event.element.name == "mpr_pause" then
         global.paused = event.element.state
         if global.paused then
-            game.print(game.get_player(event.player_index).name .. " paused the game")
+            game.print(game.get_player(event.player_index).name .. " paused the bots")
         else
-            game.print(game.get_player(event.player_index).name .. " unpaused the game")
+            game.print(game.get_player(event.player_index).name .. " unpaused the bots")
         end
         for _, player in pairs(game.players) do
             player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_pause.state = event.element.state
@@ -239,10 +267,10 @@ script.on_event(defines.events.on_gui_click, function(event)
             toggle_ignore_player(i, false, event.element.parent.parent)
         end
     elseif event.element.name == "mpr_speed_set" then
-        global.speed = tonumber(event.element.parent["mpr_speed"].text)
+        global.speed = tonumber(event.element.parent["mpr_bot_speed"].text)
         game.print(game.get_player(event.player_index).name .. " set speed to " .. global.speed)
         for _, player in pairs(game.players) do
-            player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_controls_flow.mpr_speed.text = event.element.parent["mpr_speed"].text
+            player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_controls_flow.mpr_bot_speed.text = event.element.parent["mpr_bot_speed"].text
         end
     end
 end)
@@ -251,7 +279,38 @@ local player_dropped = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
     -- If they drop into something that doesn't exist, fine...
     if entity == nil then
-        return true
+        -- Handle two chests left of burner city being misplaced
+        if not global.top_chest and global.tick < 10000 and event.entity_name == "wooden-chest"
+                and event.position.x < 101 and event.position.x > 94
+                and event.position.y < 7 and event.position.y > -3 and not global.top_chest then
+            chests = game.surfaces[1].find_entities_filtered{area={{94, -3}, {101, 7}},
+                type={'container'}}
+            if #chests ~= 2 then
+                if not global.warned_chests then
+                    game.print("Expected exactly two chests next to burner city")
+                    global.warned_chests = true
+                end
+            else
+                if chests[1].position.y < chests[2].position.y then
+                    global.top_chest = chests[1]
+                    global.bottom_chest = chests[2]
+                else
+                    global.top_chest = chests[2]
+                    global.bottom_chest = chests[1]
+                end
+            end
+        end
+        if global.top_chest and event.position.x == 98.5 then
+            if event.position.y == .5 then
+                entity = global.top_chest
+            elseif event.position.y == 3.5 then
+                entity = global.bottom_chest
+            else
+                return true
+            end
+        else
+            return true
+        end
     end
     if event.entity_name == "burner-mining-drill" or entity.type == "furnace" or event.entity_name == "boiler" then
         local inv = entity.get_inventory(defines.inventory.fuel)
@@ -457,6 +516,11 @@ script.on_event(defines.events.on_tick, function(tick_event)
     local last_tick = math.floor(global.tick)
     global.tick = global.tick + global.speed
     local new_tick = global.tick
+    if global.tick_label then
+        global.tick_label.caption = tostring(global.tick)
+    end
+    if global.tick < 60*60*2 then
+    end
     for tick = last_tick,new_tick do
         if tick % 300 == 0 and #events_to_run > 0 then
             if debug then
