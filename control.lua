@@ -110,7 +110,22 @@ script.on_event(defines.events.on_built_entity,
             e.stack = event.stack
         end
         slog(e)
-        
+        for i=1,8 do
+            if player_bps[i] then
+                local bp = player_bps[i]
+                if bp.have_entities and bp.have_entities[ce.name] then
+                    local j = #bp.entities+1
+                    bp.entities[j] = ce
+                    if ce.type == "assembling-machine" then
+                        bp.orig_recipes[j] = ce.get_recipe() and ce.get_recipe().name
+                        bp.orig_directions[j] = ce.direction
+                    end
+                    if bar and ce.type == "container" then
+                        bp.orig_bars[j] = ce.get_inventory(defines.inventory.chest).get_bar()
+                    end
+                end
+            end
+        end
     end
 )
 
@@ -165,6 +180,25 @@ function(event)
             name=event.entity.name,
             type=event.entity.type,
             recipe=recipe and recipe.name})
+        elseif event.entity.type == "splitter" then
+            local filter = event.entity.splitter_filter
+            slog({event_type="set_splitter",
+            tick=event.tick,
+            player_index=event.player_index,
+            position=event.entity.position,
+            name=event.entity.name,
+            type=event.entity.type,
+            filter=filter and filter.name,
+            splitter_input_priority=event.entity.splitter_input_priority,
+            splitter_output_priority=event.entity.splitter_output_priority})
+        elseif event.entity.name == "filter-inserter" then
+            slog({event_type="set_inserter_filter",
+            tick=event.tick,
+            player_index=event.player_index,
+            position=event.entity.position,
+            name=event.entity.name,
+            type=event.entity.type,
+            filter=event.entity.get_filter(2)})
         end
     end
 end
@@ -362,7 +396,6 @@ script.on_event(defines.events.on_tick, function(event)
                         have_entities[entity.name] = entity.name
                     end
                 end
-                -- Assume we'll only update recipes/bars for entities that already existed when bp was created :grimacing:
                 if next(have_entities) then
                     local entities = game.surfaces[1].find_entities_filtered{name=have_entities}
                     local orig_recipes = {}
@@ -378,9 +411,9 @@ script.on_event(defines.events.on_tick, function(event)
                         end
                     end
                     player_bps[i] = {entities = entities, item_number = player.cursor_stack.item_number, bar = bar, have_recipes = have_recipes,
-                        orig_bars = orig_bars, orig_recipes = orig_recipes, orig_directions = orig_directions}
-                    log("bp")
-                    log(serpent.line(player_bps[i]))
+                        have_entities = have_entities, orig_bars = orig_bars, orig_recipes = orig_recipes, orig_directions = orig_directions}
+                    --log("bp")
+                    --log(serpent.line(player_bps[i]))
                 else
                     player_bps[i] = {entities = {}}
                 end
@@ -390,16 +423,6 @@ script.on_event(defines.events.on_tick, function(event)
                 if not entity.valid then
                 elseif entity.type == "assembling-machine" then
                     local recipe = entity.get_recipe()
-                    if recipe and bp.have_recipes[recipe.name] and entity.direction ~= bp.orig_directions[j] then
-                        slog({event_type="on_player_rotated_entity",
-                            tick=event.tick,
-                            player_index=i,
-                            position=entity.position,
-                            name=entity.name,
-                            type=entity.type,
-                            direction=entity.direction,
-                        })
-                    end
                     if recipe and bp.orig_recipes[j] ~= recipe.name and bp.have_recipes[recipe.name] then
                         slog({event_type="set_recipe",
                             tick=event.tick,
@@ -409,11 +432,23 @@ script.on_event(defines.events.on_tick, function(event)
                             type=entity.type,
                             recipe=recipe.name,
                         })
+                        bp.orig_recipes[j] = recipe.name
+                    end
+                    if recipe and bp.have_recipes[recipe.name] and entity.direction ~= bp.orig_directions[j] then
+                        slog({event_type="on_player_rotated_entity",
+                            tick=event.tick,
+                            player_index=i,
+                            position=entity.position,
+                            name=entity.name,
+                            type=entity.type,
+                            direction=entity.direction,
+                        })
+                        bp.orig_directions[j] = entity.direction
                     end
                 elseif entity.type == "container" and bp.bar then
                     local bar = entity.get_inventory(defines.inventory.chest).get_bar()
                     -- logic completely untested
-                    if bar ~= orig_bars[j] and bar == bp.bar then
+                    if bar ~= orig_bars[j] and bar ~= bp.bar then
                         --[[slog({event_type="set_bar",
                             tick=event.tick,
                             player_index=i,
@@ -425,15 +460,17 @@ script.on_event(defines.events.on_tick, function(event)
                     end
                 end
             end
+        elseif player_bps[i] then
+            player_bps[i] = nil
         end
     end
     if event.tick >= next_log_tick then
-        if not p2 then
-            p2 = game.create_profiler()
-        end
+        --if not p2 then
+            --p2 = game.create_profiler()
+        --end
         next_log_tick = event.tick + 600
-        log(p2)
-        p2.reset()
+        --log(p2)
+        --p2.reset()
     end
 end)
 
@@ -448,6 +485,25 @@ script.on_event(defines.events.on_entity_settings_pasted, function(event)
             type=event.destination.type,
             recipe=recipe and recipe.name
         }) 
+    elseif event.source.type == "splitter" then
+        local filter = event.destination.splitter_filter
+        slog({event_type="set_splitter",
+            tick=event.tick,
+            player_index=event.player_index,
+            position=event.destination.position,
+            name=event.destination.name,
+            type=event.destination.type,
+            filter=filter and filter.name,
+            splitter_input_priority=event.destination.splitter_input_priority,
+            splitter_output_priority=event.destination.splitter_output_priority})
+    elseif event.source.name == "filter-inserter" then
+        slog({event_type="set_inserter_filter",
+        tick=event.tick,
+        player_index=event.player_index,
+        position=event.destination.position,
+        name=event.destination.name,
+        type=event.destination.type,
+        filter=event.destination.get_filter(2)})
     end
 end)
 
@@ -659,7 +715,8 @@ function(event)
         end
     elseif player.opened_gui_type == defines.gui_type.entity then
         local opened = player.opened
-        if opened.type == "container" or opened.type == "assembling-machine" then
+        if opened.type == "container" or opened.type == "assembling-machine" or
+                opened.type == "rocket-silo" or opened.type == "beacon" or opened.type == "lab" then
             for name, count in pairs(lost_inv_items) do
                 emit_drop(event, opened, name, count)
             end

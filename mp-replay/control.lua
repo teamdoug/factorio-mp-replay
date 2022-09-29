@@ -2,7 +2,7 @@ local player_events = require("player_events")
 
 
 -- For testing what's going wrong
-local debug = true
+local debug = false
 
 
 local events_to_run = {}
@@ -276,6 +276,10 @@ script.on_event(defines.events.on_gui_click, function(event)
     end
 end)
 
+local is_module = function(item_name)
+    return item_name:sub(-#"-module") == "-module"
+ end
+
 local player_dropped = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
     -- If they drop into something that doesn't exist, fine...
@@ -319,8 +323,34 @@ local player_dropped = function(event)
     elseif entity.type == "container" then
         local inv = entity.get_inventory(defines.inventory.chest)
         inv.insert({name=event.item_name, count=event.count})
-    elseif entity.type == "assembling-machine" or entity.type == "lab" then
-        local inv = entity.get_inventory(defines.inventory.assembling_machine_input)
+    elseif entity.type == "beacon" then
+        local inv = entity.get_inventory(defines.inventory.beacon_modules)
+        inv.insert({name=event.item_name, count=event.count})
+    elseif entity.type == "assembling-machine" then
+        local inv_type = defines.inventory.assembling_machine_input
+        if is_module(event.item_name) then
+            local mod_inv = entity.get_inventory(defines.inventory.assembling_machine_modules)
+            if mod_inv[1].valid_for_read and mod_inv[2].valid_for_read and event.item_name == mod_inv[1].name then
+            elseif entity.get_recipe() and entity.get_recipe().name == "rocket-control-unit" then
+            else
+                inv_type = defines.inventory.assembling_machine_modules
+            end
+        end
+        local inv = entity.get_inventory(inv_type)
+        inv.insert({name=event.item_name, count=event.count})
+    elseif entity.type == "rocket-silo" then
+        local inv_type = defines.inventory.assembling_machine_input
+        if is_module(event.item_name) then
+            inv_type = defines.inventory.assembling_machine_modules
+        end
+        local inv = entity.get_inventory(inv_type)
+        inv.insert({name=event.item_name, count=event.count})
+    elseif entity.type == "lab" then
+        local inv_type = defines.inventory.lab_input
+        if is_module(event.item_name) then
+            inv_type = defines.inventory.lab_modules
+        end
+        local inv = entity.get_inventory(inv_type)
         inv.insert({name=event.item_name, count=event.count})
     else
         if debug then
@@ -454,6 +484,39 @@ local set_recipe = function(event)
     return true
 end
 
+local set_splitter = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil then
+        if debug then
+            game.print("failed to set splitter at " .. event.position)
+        end
+        return false
+    end
+    if event.filter then
+        entity.splitter_filter = game.item_prototypes[event.filter]
+    end
+    if event.splitter_input_priority then
+        entity.splitter_input_priority = event.splitter_input_priority
+    end
+    if event.splitter_output_priority then
+        entity.splitter_output_priority = event.splitter_output_priority
+    end
+    return true
+end
+
+local set_inserter_filter = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil then
+        if debug then
+            game.print("failed to set inserter filter at " .. event.position)
+        end
+        return false
+    end
+    if event.filter then
+        entity.set_filter(2, event.filter)
+    end
+    return true
+end
 
 local build_entity = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
@@ -580,8 +643,7 @@ script.on_event(defines.events.on_tick, function(tick_event)
                 if event.event_type == "on_player_mined_entity" then
                     noerr, success = pcall(mine_entity, event)
                 elseif event.event_type == "on_built_entity" then
-                    success = build_entity(event)
-                    --noerr, success = pcall(build_entity, event)
+                    noerr, success = pcall(build_entity, event)
                 elseif event.event_type == "on_player_rotated_entity" then
                     noerr, success = pcall(rotate_entity, event)
                 elseif event.event_type == "player_dropped" then
@@ -592,6 +654,10 @@ script.on_event(defines.events.on_tick, function(tick_event)
                     noerr, success = pcall(player_gave, event)
                 elseif event.event_type == "set_recipe" then
                     noerr, success = pcall(set_recipe, event)
+                elseif event.event_type == "set_splitter" then
+                    noerr, success = pcall(set_splitter, event)
+                elseif event.event_type == "set_inserter_filter" then
+                    noerr, success = pcall(set_inserter_filter, event)
                 elseif event.event_type == "on_research_started" then
                     noerr, success = pcall(on_research_started, event)
                 elseif event.event_type == "on_player_changed_position" then
