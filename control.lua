@@ -11,6 +11,8 @@ local player_hand_locations = {}
 local last_moved = {[1] = 0}
 local last_position = {[1] = {0, 0}}
 
+local prev_entity_contents = {}
+
 local debug_player = 0
 
 local player_mapping = {
@@ -145,20 +147,6 @@ function(event)
 end
 )
 
-local flatten_inventory = function(inventory)
-    flat_inv = {}
-    for i=1,#inventory do
-        local ci = inventory[i]
-        if ci.valid_for_read then
-            if flat_inv[ci.name] == nil then
-                flat_inv[ci.name] = ci.count
-            else
-                flat_inv[ci.name] = flat_inv[ci.name] + ci.count
-            end
-        end
-    end
-    return flat_inv
-end
 
 local emit_drop = function(event, entity, name, count)
     slog({event_type="player_dropped",
@@ -183,7 +171,133 @@ local emit_take = function(event, entity, name, count)
 end
 
 script.on_event(defines.events.on_tick, function(event)
-    -- Rate limit to once a second
+    -- Maybe call find_entities_filtered every few seconds and keep entity references around?
+    --[[
+    local p = game.create_profiler(true)
+    local p2 = game.create_profiler()
+    local next = next
+    local entity_contents = {}
+    for i=1,8 do
+        local player = game.get_player(i)
+        if player then
+            -- 12 is big enough for assemblers but not refineries
+            p.restart()
+            local position = player.position
+            local radius = 12
+            if player.selected then
+                position = player.selected.position
+                radius = 6
+            end
+            local entities = game.surfaces[1].find_entities_filtered{position=position, radius=radius, type={'container', 'furnace', 'assembling-machine'}}
+            p.stop()
+            for _, entity in ipairs(entities) do
+                local inventories = {}
+                if entity.type == 'container' then
+                    local c = entity.get_inventory(defines.inventory.chest).get_contents()
+                    if next(c) then
+                        if not entity.unit_number then
+                            log('empty entity: ' .. entity.name)
+                        end
+                        --entity_contents[entity.unit_number] = {chest = c, name = entity.name}
+                    end
+                elseif entity.type == 'furnace' then
+                    local c = entity.get_inventory(defines.inventory.furnace_result).get_contents()
+                    if next(c) then
+                        inventories['furnace_result'] = c
+                    end
+                    --if inventories['furnace_source'] = entity.get_inventory(defines.inventory.furnace_source).get_contents()
+                    c = entity.get_inventory(defines.inventory.fuel).get_contents()
+                    if next(c) then
+                        inventories['fuel'] = c
+                    end
+                    if next(inventories) then
+                        if not entity.unit_number then
+                            log('empty entity: ' .. entity.name)
+                        end
+                        inventories['name'] = entity.name
+                        --entity_contents[entity.unit_number] = inventories
+                    end
+                    -- ehn furnace modules
+                elseif entity.type == 'assembling-machine' then
+                    local c = entity.get_inventory(defines.inventory.assembling_machine_output).get_contents()
+                    if next(c) then
+                        inventories['assembling_machine_output'] = c
+                    end
+                    c = entity.get_inventory(defines.inventory.assembling_machine_input).get_contents()
+                    if next(c) then
+                        inventories['assembling_machine_input'] = c
+                    end
+                    if next(inventories) then
+                        if not entity.unit_number then
+                            log('empty entity: ' .. entity.name)
+                        end
+                        inventories['name'] = entity.name
+                        --entity_contents[entity.unit_number] = inventories
+                    end
+                    --inventories['assembling_machine_modules'] = entity.get_inventory(defines.inventory.assembling_machine_modules).get_contents()
+                end
+            end
+        end
+    end
+    if event.tick % 60 == 0 then
+        slog({event_type="entity_contents", entity_contents=entity_contents})
+    end
+    prev_entity_contents = entity_contents
+    log(p)
+    log(p2)
+    ]]
+    --[[
+    local next = next
+    if event.tick % 60 == 0 then
+        local entity_contents = {}
+        local entities = game.surfaces[1].find_entities_filtered{type={'container', 'furnace', 'assembling-machine'}}
+        for _, entity in ipairs(entities) do
+            local inventories = {}
+            if entity.type == 'container' then
+                local c = entity.get_inventory(defines.inventory.chest).get_contents()
+                if next(c) then
+                    entity_contents[entity.unit_number] = {chest = c}
+                elseif entity_contents[entity.unit_number] then
+                    entity_contents[entity.unit_number] = nil
+                end
+            elseif entity.type == 'furnace' then
+                local c = entity.get_inventory(defines.inventory.furnace_result).get_contents()
+                if next(c) then
+                    inventories['furnace_result'] = c
+                end
+                --if inventories['furnace_source'] = entity.get_inventory(defines.inventory.furnace_source).get_contents()
+                c = entity.get_inventory(defines.inventory.fuel).get_contents()
+                if next(c) then
+                    inventories['fuel'] = c
+                end
+                if next(inventories) then
+                    entity_contents[entity.unit_number] = inventories
+                elseif entity_contents[entity.unit_number] then
+                    entity_contents[entity.unit_number] = nil
+                end
+                -- ehn furnace modules
+            elseif entity.type == 'assembling-machine' then
+                local c = entity.get_inventory(defines.inventory.assembling_machine_output).get_contents()
+                if next(c) then
+                    inventories['assembling_machine_output'] = c
+                end
+                c = entity.get_inventory(defines.inventory.assembling_machine_input).get_contents()
+                if next(c) then
+                    inventories['assembling_machine_input'] = c
+                end
+                if next(inventories) then
+                    entity_contents[entity.unit_number] = inventories
+                elseif entity_contents[entity.unit_number] then
+                    entity_contents[entity.unit_number] = nil
+                end
+                --inventories['assembling_machine_modules'] = entity.get_inventory(defines.inventory.assembling_machine_modules).get_contents()
+            end
+        end
+
+        slog({event_type="entity_contents", entity_contents=entity_contents})
+    end
+    ]]
+    -- Rate limit position updates to twice a second
     for i = 1,8 do
         local player = game.get_player(i)
         if player and player.character and event.tick > last_moved[i] + 30 then
@@ -289,7 +403,7 @@ function(event)
     local old_inv = player_inventories[event.player_index]
     local player = game.get_player(event.player_index)
     local cur_inv = player.get_main_inventory()
-    cur_inv = flatten_inventory(cur_inv)
+    cur_inv = cur_inv.get_contents()
     local new_inv_items = {}
     local lost_inv_items = {}
     if event.player_index == debug_player then
