@@ -2,7 +2,7 @@ local player_events = require("player_events")
 
 
 -- For testing what's going wrong
-local debug = false
+local debug = true
 
 
 local events_to_run = {}
@@ -46,7 +46,7 @@ local toggle_ignore_player = function(id, state, player_flow)
         global.player_entities[id] = surf.create_entity{
             position=global.player_positions[id],
             direction=global.player_directions[id],
-            name="character",
+            name="character-no-clip",
             force="player",
             }
         global.player_entities[id].color = player_colors[id]
@@ -68,34 +68,35 @@ local toggle_ignore_player = function(id, state, player_flow)
 end
 
 script.on_init(function()
-   global.tick = 0
-   global.mp_event_index = 1
-   global.player_entities = {}
-   global.ignored_player_map = {}
-   global.player_positions = {}
-   global.player_directions = {}
-   global.player_labels = {}
-   for i=1,8 do
-    global.ignored_player_map[i] = true
-    global.player_positions[i] = {5, -5}
-    global.player_directions[i] = 0
-    toggle_ignore_player(i, false, nil)
-    local new_force = game.create_force(player_names[i])
-    new_force.set_friend("player", true)
-    game.forces['player'].set_friend(new_force, true)
-    for j=1,i-1 do
-        local of = game.forces[player_names[j]]
-        of.set_friend(new_force, true)
-        new_force.set_friend(of, true)
+    global.last_tick = -1
+    global.tick = 0
+    global.mp_event_index = 1
+    global.player_entities = {}
+    global.ignored_player_map = {}
+    global.player_positions = {}
+    global.player_directions = {}
+    global.player_labels = {}
+    for i=1,8 do
+        global.ignored_player_map[i] = true
+        global.player_positions[i] = {5, -5}
+        global.player_directions[i] = 0
+        toggle_ignore_player(i, false, nil)
+        local new_force = game.create_force(player_names[i])
+        new_force.set_friend("player", true)
+        game.forces['player'].set_friend(new_force, true)
+        for j=1,i-1 do
+            local of = game.forces[player_names[j]]
+            of.set_friend(new_force, true)
+            new_force.set_friend(of, true)
+        end
     end
-   end
-   global.paused = true
-   global.speed = 1
-   global.players = {}
-   -- player index to id of the player they're playing as
-   global.current_player_map = {}
-   global.current_reversed_player_map = {}
-   global.entity_highlights = {}
+    global.paused = true
+    global.speed = 1
+    global.players = {}
+    -- player index to id of the player they're playing as
+    global.current_player_map = {}
+    global.current_reversed_player_map = {}
+    global.entity_highlights = {}
 end)
 
 
@@ -357,6 +358,17 @@ local player_took = function(event)
             event.count = event.count - removed
             return false
         end
+    elseif entity.name == "burner-mining-drill" then
+        local inv = entity.get_inventory(defines.inventory.fuel)
+        local removed = inv.remove({name=event.item_name, count=event.count})
+        if removed < event.count then
+            if false and debug then
+                game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
+                    event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but only got " .. removed)
+            end
+            event.count = event.count - removed
+            return false
+        end
     elseif entity.type == "container" then
         local inv = entity.get_inventory(defines.inventory.chest)
         local removed = inv.remove({name=event.item_name, count=event.count})
@@ -433,6 +445,9 @@ end
 local set_recipe = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
     if entity == nil then
+        if debug then
+            game.print("failed to set recipe " .. event.recipe .. " at " .. event.position)
+        end
         return false
     end
     entity.set_recipe(event.recipe)
@@ -449,11 +464,16 @@ local build_entity = function(event)
     if event.ghost_name then
         build_check_type = defines.build_check_type.manual_ghost
     end
-    if not game.surfaces["nauvis"].can_place_entity{
+    local force = player_names[event.player_index]
+    -- Labs don't research across forces. pipe-to-ground (and maybe underground belts) don't connect across forces
+    if event.name == "lab" or event.name == "pipe-to-ground" or event.name == "underground-belt" then
+        force = "player"
+    end
+    if event.name ~= "entity-ghost" and not game.surfaces["nauvis"].can_place_entity{
         name = event.name,
         position = event.position,
         direction = event.direction,
-        force = player_names[event.player_index],
+        force = force,
         inner_name = event.ghost_name,
         build_check_type = build_check_type,
     } then
@@ -463,7 +483,7 @@ local build_entity = function(event)
         name = event.name,
         position = event.position,
         direction = event.direction,
-        force = player_names[event.player_index],
+        force = force,
         spill = false,
         recipe = event.recipe,
         type = event.belt_to_ground_type,
@@ -471,7 +491,7 @@ local build_entity = function(event)
         stack = event.stack,
         inner_name = event.ghost_name
     }
-    if global.current_reversed_player_map[event.player_index] then
+    if entity and global.current_reversed_player_map[event.player_index] then
         local b = entity.selection_box
         script.register_on_entity_destroyed(entity)
         global.entity_highlights[entity.unit_number] = rendering.draw_rectangle{
@@ -488,6 +508,14 @@ script.on_event(defines.events.on_entity_destroyed, function(event)
     if global.entity_highlights[event.unit_number] then
         rendering.destroy(global.entity_highlights[event.unit_number])
         global.entity_highlights[event.unit_number] = nil
+    end
+end)
+
+script.on_event(defines.events.on_research_finished, function(event)
+    if event.research.name == 'steel-processing' and not event.by_script then
+        for _, name in pairs(player_names) do
+            game.forces[name].technologies['steel-processing'].researched = true
+        end
     end
 end)
 
@@ -513,15 +541,19 @@ script.on_event(defines.events.on_tick, function(tick_event)
     if global.paused then
         return
     end
-    local last_tick = math.floor(global.tick)
+    if not global.real_last_tick then
+        global.real_last_tick = -1
+    end
     global.tick = global.tick + global.speed
-    local new_tick = global.tick
+    local new_tick = math.floor(global.tick)
     if global.tick_label then
-        global.tick_label.caption = tostring(global.tick)
+        global.tick_label.caption = tostring(new_tick)
     end
-    if global.tick < 60*60*2 then
-    end
-    for tick = last_tick,new_tick do
+    for tick = global.last_tick+1,new_tick do
+        if tick - 1 ~= global.real_last_tick then
+            game.print("lost tick " .. tick - 1)
+        end
+        global.real_last_tick = tick
         if tick % 300 == 0 and #events_to_run > 0 then
             if debug then
                 game.print(#events_to_run .. " events are failing to run")
@@ -548,7 +580,8 @@ script.on_event(defines.events.on_tick, function(tick_event)
                 if event.event_type == "on_player_mined_entity" then
                     noerr, success = pcall(mine_entity, event)
                 elseif event.event_type == "on_built_entity" then
-                    noerr, success = pcall(build_entity, event)
+                    success = build_entity(event)
+                    --noerr, success = pcall(build_entity, event)
                 elseif event.event_type == "on_player_rotated_entity" then
                     noerr, success = pcall(rotate_entity, event)
                 elseif event.event_type == "player_dropped" then
@@ -574,13 +607,13 @@ script.on_event(defines.events.on_tick, function(tick_event)
                         game.print("error (" .. serpent.line(success) .. ") event: " .. serpent.line(event))
                     end
                 elseif not success then
-                    if event.tick == tick then
+                    if event.tick == tick and event.event_type == "on_player_mined_entity" then
                         if debug then
                             game.print("failed to execute event: " .. serpent.line(event))
                         end
                     end
-                    -- Try again for up to 30 secs
-                    if tick - event.tick < 30 * 60 then
+                    -- Try again for up to 60 secs
+                    if tick - event.tick < 60 * 60 then
                         table.insert(new_events_to_run, event)
                     end
                 end
@@ -588,5 +621,6 @@ script.on_event(defines.events.on_tick, function(tick_event)
         end
         events_to_run = new_events_to_run
     end
+    global.last_tick = new_tick
 
 end)

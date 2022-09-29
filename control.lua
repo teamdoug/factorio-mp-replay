@@ -26,14 +26,38 @@ local player_mapping = {
     6,
 }
 
-local function slog(table)
-    if table.player_index then
-        table.player_index = player_mapping[table.player_index]
+-- Entities we set recipes on. Yeesh.
+local assembler_entities = {
+    ["assembling-machine-1"] = true,
+    ["assembling-machine-2"] = true,
+    ["chemical-plant"] = true,
+    ["oil-refinery"] = true,
+}
+-- Entities we set bars on. Yeesh.
+local container_entities = {
+    ["iron-chest"] = true,
+    ["wooden-chest"] = true,
+    ["steel-chest"] = true,
+}
+
+local player_bps = {}
+
+local message_buffer = {}
+local next_log_tick = 0
+local p2
+
+local function slog(ltable)
+    if ltable.player_index then
+        ltable.player_index = player_mapping[ltable.player_index]
     end
-    if table.to_player_index then
-        table.to_player_index = player_mapping[table.to_player_index]
+    if ltable.to_player_index then
+        ltable.to_player_index = player_mapping[ltable.to_player_index]
     end
-    log("rlog: " .. serpent.line(table))
+    table.insert(message_buffer, serpent.line(ltable))
+    if #message_buffer >= 50 then
+        log("rlog: " .. table.concat(message_buffer, "\nrlog: "))
+        message_buffer = {}
+    end
 end
 
 for i = 2,8 do
@@ -41,6 +65,7 @@ for i = 2,8 do
     last_moved[i] = 0
     last_position[i] = {0, 0}
 end
+
 
 script.on_event(defines.events.on_player_mined_entity,
     function(event)
@@ -78,11 +103,9 @@ script.on_event(defines.events.on_built_entity,
             end
         elseif type == "container" then
             local inv = ce.get_inventory(defines.inventory.chest)
-            ok, err = pcall(function() e.bar = inv.get_bar() end)
-            if not ok then
-                game.print(err.. " " .. serpent.line(e))
+            if inv then
+                e.bar = inv.get_bar()
             end
-            e.bar = inv.get_bar()
         elseif type == "item-entity" then
             e.stack = event.stack
         end
@@ -302,6 +325,7 @@ script.on_event(defines.events.on_tick, function(event)
         local player = game.get_player(i)
         if player and player.character and event.tick > last_moved[i] + 30 then
             if last_position[i][1] ~= player.position.x or last_position[i][2] ~= player.position.y then 
+                local p2 = game.create_profiler()
                 slog({event_type="on_player_changed_position",
                     tick=event.tick,
                     player_index=i,
@@ -313,8 +337,103 @@ script.on_event(defines.events.on_tick, function(event)
             end
         end
         if player and player.cursor_stack and player.cursor_stack.valid_for_read and player.cursor_stack.type == 'blueprint' then
-            -- try to determine if they pasted the blueprint??
+            local entity_names = {}
+            if not player_bps[i] or player_bps[i].item_number ~= player.cursor_stack.item_number then
+                local have_entities = {}
+                local have_recipes = {}
+                local bar
+                local bp_entities = player.cursor_stack.get_blueprint_entities()
+                if not bp_entities then
+                    bp_entities = {}
+                end
+                for _, entity in ipairs(bp_entities) do
+                    if assembler_entities[entity.name] then
+                        if entity.recipe then
+                            have_recipes[entity.recipe] = true
+                        end
+                        have_entities[entity.name] = entity.name
+                    elseif container_entities[entity.name] then
+                        if bar and entity.bar and bar ~= entity.bar then
+                            game.print("bar was " .. bar .. " but have bar " .. entity.bar .. " for player " .. player.name)
+                        end
+                        if entity.bar then
+                            bar = entity.bar
+                        end
+                        have_entities[entity.name] = entity.name
+                    end
+                end
+                -- Assume we'll only update recipes/bars for entities that already existed when bp was created :grimacing:
+                if next(have_entities) then
+                    local entities = game.surfaces[1].find_entities_filtered{name=have_entities}
+                    local orig_recipes = {}
+                    local orig_bars = {}
+                    local orig_directions = {}
+                    for j, entity in ipairs(entities) do
+                        if entity.type == "assembling-machine" then
+                            orig_recipes[j] = entity.get_recipe() and entity.get_recipe().name
+                            orig_directions[j] = entity.direction
+                        end
+                        if bar and entity.type == "container" then
+                            orig_bars[j] = entity.get_inventory(defines.inventory.chest).get_bar()
+                        end
+                    end
+                    player_bps[i] = {entities = entities, item_number = player.cursor_stack.item_number, bar = bar, have_recipes = have_recipes,
+                        orig_bars = orig_bars, orig_recipes = orig_recipes, orig_directions = orig_directions}
+                    log("bp")
+                    log(serpent.line(player_bps[i]))
+                else
+                    player_bps[i] = {entities = {}}
+                end
+            end
+            local bp = player_bps[i]
+            for j, entity in ipairs(bp.entities) do
+                if not entity.valid then
+                elseif entity.type == "assembling-machine" then
+                    local recipe = entity.get_recipe()
+                    if recipe and bp.have_recipes[recipe.name] and entity.direction ~= bp.orig_directions[j] then
+                        slog({event_type="on_player_rotated_entity",
+                            tick=event.tick,
+                            player_index=i,
+                            position=entity.position,
+                            name=entity.name,
+                            type=entity.type,
+                            direction=entity.direction,
+                        })
+                    end
+                    if recipe and bp.orig_recipes[j] ~= recipe.name and bp.have_recipes[recipe.name] then
+                        slog({event_type="set_recipe",
+                            tick=event.tick,
+                            player_index=i,
+                            position=entity.position,
+                            name=entity.name,
+                            type=entity.type,
+                            recipe=recipe.name,
+                        })
+                    end
+                elseif entity.type == "container" and bp.bar then
+                    local bar = entity.get_inventory(defines.inventory.chest).get_bar()
+                    -- logic completely untested
+                    if bar ~= orig_bars[j] and bar == bp.bar then
+                        --[[slog({event_type="set_bar",
+                            tick=event.tick,
+                            player_index=i,
+                            position=entity.position,
+                            name=entity.name,
+                            type=entity.type,
+                            recipe=recipe.name,
+                        })]]
+                    end
+                end
+            end
         end
+    end
+    if event.tick >= next_log_tick then
+        if not p2 then
+            p2 = game.create_profiler()
+        end
+        next_log_tick = event.tick + 600
+        log(p2)
+        p2.reset()
     end
 end)
 

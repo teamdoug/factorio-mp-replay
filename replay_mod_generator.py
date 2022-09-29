@@ -7,7 +7,7 @@ def main():
         f.write('return {')
         first = True
         for line in text.splitlines():
-            if ': rlog: {' not in line:
+            if ': rlog: {' not in line and not line.startswith('rlog: {'):
                 continue
             if first:
                 first = False
