@@ -76,6 +76,7 @@ script.on_init(function()
     global.player_positions = {}
     global.player_directions = {}
     global.player_labels = {}
+    global.time_labels = {}
     for i=1,8 do
         global.ignored_player_map[i] = true
         global.player_positions[i] = {5, -5}
@@ -127,6 +128,8 @@ script.on_event(defines.events.on_player_created, function(event)
     bot_speed.style.minimal_width=50
     local speed_set = controls_flow.add{type="button", name="mpr_speed_set", caption="✓"}
     speed_set.style.size = {40, 30}
+    local time_flow = controls_flow.add{type="flow", name="time", direction="vertical"}
+    global.time_labels[event.player_index] = time_flow.add{type="label", name="time_label", caption="0:00:00"}
     if extra_speed_control then
         local speed_flow = main_flow.add{type="flow", name="speed", direction="horizontal"}
         local a = speed_flow.add{type="button", name="pause", caption="‖"}
@@ -141,7 +144,7 @@ script.on_event(defines.events.on_player_created, function(event)
         local d = speed_flow.add{type="button", name="fastest", caption="▶▶▶"}
         d.style.maximal_width=70
         d.style.minimal_width=70
-        global.tick_label = controls_flow.add{type="label", name="tick_label", caption="0"}
+        global.tick_label = time_flow.add{type="label", name="tick_label", caption="0"}
     end
     local player_header_flow = main_flow.add{type="flow", name="mpr_player_header_flow", direction="horizontal"}
     player_header_flow.add{type="label", name="mpr_players_label", caption="Players"}
@@ -574,6 +577,13 @@ local on_player_changed_position = function(event)
     return true
 end
 
+local totime = function(tick)
+    hour = math.floor(tick / 3600 / 60)
+    minute = math.floor(tick / 60 / 60) % 60
+    second = math.floor(tick / 60) % 60
+    return string.format("%d:%02d:%02d", hour, minute, second)
+end
+
 script.on_event(defines.events.on_tick, function(tick_event)
     for _, index in pairs(global.current_player_map) do
         if not global.ignored_player_map[index] then
@@ -590,6 +600,9 @@ script.on_event(defines.events.on_tick, function(tick_event)
     local new_tick = math.floor(global.tick)
     if global.tick_label then
         global.tick_label.caption = tostring(new_tick)
+    end
+    for _, player in pairs(game.players) do
+        global.time_labels[player.index].caption = totime(new_tick)
     end
     for tick = global.last_tick+1,new_tick do
         if tick - 1 ~= global.real_last_tick then
