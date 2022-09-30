@@ -81,14 +81,6 @@ script.on_init(function()
         global.player_positions[i] = {5, -5}
         global.player_directions[i] = 0
         toggle_ignore_player(i, false, nil)
-        local new_force = game.create_force(player_names[i])
-        new_force.set_friend("player", true)
-        game.forces['player'].set_friend(new_force, true)
-        for j=1,i-1 do
-            local of = game.forces[player_names[j]]
-            of.set_friend(new_force, true)
-            new_force.set_friend(of, true)
-        end
     end
     global.paused = true
     global.speed = 1
@@ -527,16 +519,11 @@ local build_entity = function(event)
     if event.ghost_name then
         build_check_type = defines.build_check_type.manual_ghost
     end
-    local force = player_names[event.player_index]
-    -- Labs don't research across forces. pipe-to-ground (and maybe underground belts) don't connect across forces
-    if event.name == "lab" or event.name == "pipe-to-ground" or event.name == "underground-belt" then
-        force = "player"
-    end
     if event.name ~= "entity-ghost" and not game.surfaces["nauvis"].can_place_entity{
         name = event.name,
         position = event.position,
         direction = event.direction,
-        force = force,
+        force = "player",
         inner_name = event.ghost_name,
         build_check_type = build_check_type,
     } then
@@ -546,7 +533,7 @@ local build_entity = function(event)
         name = event.name,
         position = event.position,
         direction = event.direction,
-        force = force,
+        force = "player",
         spill = false,
         recipe = event.recipe,
         type = event.belt_to_ground_type,
@@ -571,14 +558,6 @@ script.on_event(defines.events.on_entity_destroyed, function(event)
     if global.entity_highlights[event.unit_number] then
         rendering.destroy(global.entity_highlights[event.unit_number])
         global.entity_highlights[event.unit_number] = nil
-    end
-end)
-
-script.on_event(defines.events.on_research_finished, function(event)
-    if event.research.name == 'steel-processing' and not event.by_script then
-        for _, name in pairs(player_names) do
-            game.forces[name].technologies['steel-processing'].researched = true
-        end
     end
 end)
 
