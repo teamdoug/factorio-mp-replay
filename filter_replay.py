@@ -85,7 +85,10 @@ def parse_table_helper(line, start):
         if c == "}":
             if in_str or not in_value or not cur_val:
                 raise ValueError("Unexpected }")
-            result[cur_key] = cur_val
+            if '.' in cur_val:
+                result[cur_key] = float(cur_val)
+            else:
+                result[cur_key] = int(cur_val)
             return result, i+1
         if in_key:
             cur_key += c
@@ -108,7 +111,7 @@ def main():
         text = f.read()
     with open('filtered_replay.log', 'w') as f:
         for line in text.splitlines():
-            if ': rlog: {' not in line:
+            if 'rlog: {' not in line:
                 continue
             line = line[line.index('rlog: ') + 6:]
             parsed = parse_line(line)
@@ -116,7 +119,7 @@ def main():
                 continue
             #if parsed['event_type'] != 'player_dropped':
                 #continue
-            if parsed.get('player_index') != 2:
+            if parsed.get('player_index') != 6:
                 continue
             f.write(line)
             f.write('\n')
