@@ -272,7 +272,7 @@ script.on_event(defines.events.on_gui_click, function(event)
 end)
 
 local is_module = function(item_name)
-    return item_name:sub(-#"-module") == "-module"
+    return string.find(item_name, "-module")
  end
 
 local player_dropped = function(event)
