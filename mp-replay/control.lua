@@ -93,29 +93,31 @@ script.on_init(function()
 end)
 
 
-script.on_event(defines.events.on_player_created, function(event)
+local create_player = function(event)
     local player = game.get_player(event.player_index)
     if debug and player.name ~= "heartosis" then  
         debug = false
     end
     local extra_speed_control = player.name == "heartosis"
     local name = player.name:lower()
-    for i=1,8 do
-        local check_names = player_names[i]:lower()
-        for check_name in string.gmatch(check_names, "[a-z_]+") do
-            if check_name == name then
-                toggle_ignore_player(i, true, nil)
-                global.current_player_map[event.player_index] = i
-                global.current_reversed_player_map[i] = event.player_index
-                game.print(player.name .. " joined. Ignoring player " .. i .. ": " .. player_names[i])
+    if not global.players[event.player_index] then
+        for i=1,8 do
+            local check_names = player_names[i]:lower()
+            for check_name in string.gmatch(check_names, "[a-z_]+") do
+                if check_name == name then
+                    toggle_ignore_player(i, true, nil)
+                    global.current_player_map[event.player_index] = i
+                    global.current_reversed_player_map[i] = event.player_index
+                    game.print(player.name .. " joined. Ignoring player " .. i .. ": " .. player_names[i])
+                end
             end
         end
-    end
 
-    global.players[event.player_index] = {
-        controls_visible = true,
-        players_visible = true
-    }
+        global.players[event.player_index] = {
+            controls_visible = true,
+            players_visible = true
+        }
+    end
 
     local screen_element = player.gui.screen
     local main_frame = screen_element.add{type="frame", name="mpr_main_frame", caption="MP Replay"}
@@ -171,16 +173,31 @@ script.on_event(defines.events.on_player_created, function(event)
     for _, player in pairs(game.players) do
 
         for i=1,8 do
-            local ocur = player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_player_flow["mpr_player_flow_"..i].mpr_current_player
-            if global.current_reversed_player_map[i] then
-                ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
-            else
-                ocur.caption = ""
+            if player.gui.screen.mpr_main_frame then
+                local ocur = player.gui.screen.mpr_main_frame.mpr_main_flow.mpr_player_flow["mpr_player_flow_"..i].mpr_current_player
+                if global.current_reversed_player_map[i] then
+                    ocur.caption = "(" .. game.get_player(global.current_reversed_player_map[i]).name .. ")"
+                else
+                    ocur.caption = ""
+                end
             end
-            
         end
     end
+end
+
+script.on_configuration_changed(function(config_change)
+    if not global.time_labels then
+        global.time_labels = {}
+    end
+    for index, player in pairs(game.players) do
+        if player.gui.screen["mpr_main_frame"] then
+            player.gui.screen.mpr_main_frame.destroy()
+        end
+        create_player({player_index = index})
+    end
 end)
+
+script.on_event(defines.events.on_player_created, create_player)
 
 
 script.on_event(defines.events.on_gui_click, function(event)
@@ -444,8 +461,12 @@ end
 local mine_entity = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
     if entity == nil then
-        -- rocks and trees we don't care if something else killed them
+        -- rocks and trees we don't care if something else killed them unless the chunk needs generating
         if event.type == "simple-entity" or event.type == "tree" then
+            if not game.surfaces[1].is_chunk_generated({event.position.x / 32, event.position.y / 32}) then
+                game.surfaces[1].request_to_generate_chunks(event.position, 0)
+                return false
+            end
             return true
         else
             return false

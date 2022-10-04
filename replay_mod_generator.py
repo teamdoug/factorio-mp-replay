@@ -44,6 +44,9 @@ def fix_event(event):
             if x == 271.5 and y == -47.5:
                 event['position']['x'] -= 2
                 event['position']['y'] -= 3
+            if x == 113.5 and y == 47.5:
+                event['position']['x'] = 109.5
+                return [event, copy_event(event, 116.5, 47.5)]
         elif event['name'] == 'transport-belt':
             if tick > 183000 and 264.5 <= x <= 271.5 and -49.5 <= y <= -45.5:
                 return []
