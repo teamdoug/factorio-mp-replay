@@ -1,4 +1,4 @@
-
+import shutil
 import filter_replay
 import copy
 
@@ -18,6 +18,66 @@ def unparse(obj):
     raise ValueError(str(obj))
 
 def fix_event(event):
+    if 'position' not in event:
+        return [event]
+    player_index = event['player_index']
+    event_type = event['event_type']
+    tick = event['tick']
+    x, y = event['position']['x'], event['position']['y']
+    # iron line from heartosis to typical_guy
+    if player_index == 7 and tick >= 167032:
+        if event_type != 'on_player_changed_position':
+            if x >= 232.5 and y <= -40.5:
+                event['player_index'] = 5
+                return [event]
+
+    # prevent building bad belt since we can't pick up the steel that ended up here
+    if x == 265.5 and y == -34.5 and tick in (154439,172338):
+        return []
+    if event_type == 'player_dropped':
+        if event['item_name'] == 'productivity-module':
+            # Copy modules from blue to green circuits
+            if y in (76.5, 44.5) and x >= 317.5 and x <= 359.5:
+                if y == 76.5:
+                    y = 70.5
+                else:
+                    y = 50.5
+                return [event, copy_event(event, x, y)]
+    if event_type == 'on_built_entity':
+        # prevent red circuits going the wrong way
+        if x == 313.5 and y == 48.5:
+            event['direction'] = 2
+            return [event]
+        # prevent building pipe that connects fluid systems since flushing isn't implemented
+        if x == 156.5 and y == 153.5:
+            return []
+        # add 4 missing miners and power poles
+        if x == 132.5 and y == 97.5:
+            ce = copy_event(event, 133.5, 101.5)
+            ce['direction'] = 0
+            pe = copy_event(event, 144.5, 100.5)
+            pe['direction'] = 0
+            pe['name'] = 'small-electric-pole'
+            pe['type'] = 'electric-pole'
+            return[event, ce, copy_event(ce, 136.5, 101.5), copy_event(ce, 139.5, 101.5), copy_event(ce, 142.5, 101.5),
+            pe, copy_event(pe, 139.5, 103.5), copy_event(pe, 133.5, 103.5)]
+        # missing belt in miners for top steel
+        if x == 228.5 and y == -111.5:
+            return [event, copy_event(event, 228.5, -110.5)]
+        # powerlane inserters
+        if x == 110.5 and y in (36.5, 37.5, 38.5):
+            ce = copy_event(event, x-2, y)
+            ce['direction'] = 6
+            return [event, ce]
+    # Add more iron to chest for sticks
+    if x == 252.5 and y == -5.5 and tick == 145103:
+        event['count'] = 2000
+    # Accidentally dropping steel plates in rail chests
+    if x in (281.5, 285.5) and y == 6.5 and event_type == 'player_dropped' and event['item_name'] == 'steel-plate':
+        return []
+    return [event]
+
+def fix_event_2020(event):
     if 'position' not in event:
         return [event]
     player_index = event['player_index']
@@ -200,6 +260,7 @@ def main():
                     f.write(',\n')
                 f.write(unparse(event))
         f.write('}')
+    shutil.copy(r'C:/Program Files/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
 
 if __name__ == '__main__':
     main()

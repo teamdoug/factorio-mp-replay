@@ -12,10 +12,10 @@ local player_names = {
     'Phredward',
     'mysticamber',
     'Franqly/RuneBoggler',
-    'typical_guy/thePiedPiper',
+    'typical_guy',
     'JeHor',
     'heartosis',
-    'thedoh'
+    'thedoh/thePiedPiper'
 }
 
 

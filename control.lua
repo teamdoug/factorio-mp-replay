@@ -16,14 +16,14 @@ local prev_entity_contents = {}
 local debug_player = 0
 
 local player_mapping = {
-    3,
-    7,
-    1,
-    2,
-    8,
-    5,
-    4,
     6,
+    3,
+    5,
+    7,
+    8,
+    4,
+    2,
+    1,
 }
 
 -- Entities we set recipes on. Yeesh.
@@ -79,6 +79,8 @@ script.on_event(defines.events.on_player_mined_entity,
     end
 )
 
+last_underground_belt_entity = nil
+last_underground_belt_entity_direction = nil
 
 script.on_event(defines.events.on_built_entity,
     function(event)
@@ -97,6 +99,8 @@ script.on_event(defines.events.on_built_entity,
         end
         if type == "underground-belt" then
             e.belt_to_ground_type = ce.belt_to_ground_type
+            last_underground_belt_entity = ce
+            last_underground_belt_entity_direction = ce.belt_to_ground_type
         elseif type == "assembling-machine" then
             if ce.get_recipe() then
                 e.recipe = ce.get_recipe().name
@@ -192,13 +196,17 @@ function(event)
             splitter_input_priority=event.entity.splitter_input_priority,
             splitter_output_priority=event.entity.splitter_output_priority})
         elseif event.entity.name == "filter-inserter" then
+            local filter = event.entity.get_filter(1)
+            if filter == nil then
+                filter = event.entity.get_filter(2)
+            end
             slog({event_type="set_inserter_filter",
             tick=event.tick,
             player_index=event.player_index,
             position=event.entity.position,
             name=event.entity.name,
             type=event.entity.type,
-            filter=event.entity.get_filter(2)})
+            filter=filter})
         end
     end
 end
@@ -354,6 +362,20 @@ script.on_event(defines.events.on_tick, function(event)
         slog({event_type="entity_contents", entity_contents=entity_contents})
     end
     ]]
+    if last_underground_belt_entity ~= nil then
+        if last_underground_belt_entity.belt_to_ground_type ~= last_underground_belt_entity_direction then
+            local entity = last_underground_belt_entity
+            slog({event_type="on_player_rotated_entity",
+            tick=event.tick,
+            player_index=entity.last_user.index,
+            position=entity.position,
+            direction=entity.direction,
+            belt_to_ground_type=entity.belt_to_ground_type,
+            name=entity.name,
+            type=entity.type})
+        end
+        last_underground_belt_entity = nil
+    end
     -- Rate limit position updates to twice a second
     for i = 1,8 do
         local player = game.get_player(i)
@@ -497,13 +519,17 @@ script.on_event(defines.events.on_entity_settings_pasted, function(event)
             splitter_input_priority=event.destination.splitter_input_priority,
             splitter_output_priority=event.destination.splitter_output_priority})
     elseif event.source.name == "filter-inserter" then
+        local filter = event.destination.get_filter(1)
+        if filter == nil then
+            filter = event.destination.get_filter(2)
+        end
         slog({event_type="set_inserter_filter",
         tick=event.tick,
         player_index=event.player_index,
         position=event.destination.position,
         name=event.destination.name,
         type=event.destination.type,
-        filter=event.destination.get_filter(2)})
+        filter=filter})
     end
 end)
 
