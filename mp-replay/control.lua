@@ -77,6 +77,8 @@ script.on_init(function()
     global.player_directions = {}
     global.player_labels = {}
     global.time_labels = {}
+    global.track_players = false
+    global.track_player_toggles = {}
     for i=1,8 do
         global.ignored_player_map[i] = true
         global.player_positions[i] = {5, -5}
@@ -112,7 +114,6 @@ local create_player = function(event)
                 end
             end
         end
-
         global.players[event.player_index] = {
             controls_visible = true,
             players_visible = true
@@ -170,6 +171,7 @@ local create_player = function(event)
     local toggle_all_flow = player_flow.add{type="flow", name="mpr_player_toggle_all_flow", direction="horizontal"}
     toggle_all_flow.add{type="button", name="mpr_ignore_all_players", caption="Ignore All"}
     toggle_all_flow.add{type="button", name="mpr_activate_all_players", caption="Activate All"}
+    global.track_player_toggles[event.player_index] = player_flow.add{type="checkbox", name="track_players_toggle", caption="Track all placements", state=global.track_players}
     for _, player in pairs(game.players) do
 
         for i=1,8 do
@@ -186,6 +188,15 @@ local create_player = function(event)
 end
 
 script.on_configuration_changed(function(config_change)
+    local old_version = config_change.mod_changes['mp-replay'].old_version
+    local ver_nums = {}
+    for v in old_version:gmatch("(%d+)") do
+        table.insert(ver_nums, tonumber(v))
+    end
+    if ver_nums[1] == 0 and ver_nums[2] < 6 then
+        global.track_players = false
+        global.track_player_toggles = {}
+    end
     if not global.time_labels then
         global.time_labels = {}
     end
@@ -278,6 +289,11 @@ script.on_event(defines.events.on_gui_click, function(event)
     elseif event.element.name == "mpr_activate_all_players" then
         for i=1,8 do
             toggle_ignore_player(i, false, event.element.parent.parent)
+        end
+    elseif event.element.name == "track_players_toggle" then
+        global.track_players = not global.track_players
+        for _, toggle in pairs(global.track_player_toggles) do
+            toggle.state = global.track_players
         end
     elseif event.element.name == "mpr_speed_set" then
         global.speed = tonumber(event.element.parent["mpr_bot_speed"].text)
@@ -534,21 +550,27 @@ local set_inserter_filter = function(event)
     return true
 end
 
+local scale_color = function(color, alpha)
+    return {color[1] * alpha, color[2] * alpha, color[3] * alpha, alpha}
+end
+
 local build_entity = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
     if entity and entity.name == event.name and (not event.ghost_name or entity.ghost_name == event.ghost_name) then
         return true
     end
     local build_check_type = defines.build_check_type.manual
+    local check_name = event.name
     if event.ghost_name then
         build_check_type = defines.build_check_type.manual_ghost
+        check_name = event.ghost_name
     end
-    if event.name ~= "entity-ghost" and not game.surfaces["nauvis"].can_place_entity{
+    if not game.surfaces["nauvis"].can_place_entity{
         name = event.name,
         position = event.position,
         direction = event.direction,
         force = "player",
-        inner_name = event.ghost_name,
+        inner_name = check_name,
         build_check_type = build_check_type,
     } then
         return false
@@ -565,7 +587,16 @@ local build_entity = function(event)
         stack = event.stack,
         inner_name = event.ghost_name
     }
-    if entity and global.current_reversed_player_map[event.player_index] then
+    if entity and global.track_players then
+        local b = entity.selection_box
+        script.register_on_entity_destroyed(entity)
+        global.entity_highlights[entity.unit_number] = rendering.draw_rectangle{
+            left_top=b.left_top,
+            right_bottom=b.right_bottom,
+            color=scale_color(player_colors[event.player_index], 0.4),
+            filled=true,
+            surface=game.surfaces["nauvis"]}
+    elseif entity and global.current_reversed_player_map[event.player_index] then
         local b = entity.selection_box
         script.register_on_entity_destroyed(entity)
         global.entity_highlights[entity.unit_number] = rendering.draw_rectangle{
