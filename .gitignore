@@ -1,0 +1,7 @@
+*.pyc
+*.zip
+/replaytest*
+move.log
+replay.log
+mp-replay*.zip
+filtered_replay.log
