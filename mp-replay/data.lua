@@ -13,7 +13,5 @@ styles["mpr_controls_flow"] = {
 local characterNoClip = table.deepcopy(data.raw.character["character"])
 
 characterNoClip.name = "character-no-clip"
-log("collision_mask")
-log(characterNoClip.collision_mask)
 characterNoClip.collision_mask = {["not-colliding-with-itself"] = true}
 data:extend({characterNoClip})

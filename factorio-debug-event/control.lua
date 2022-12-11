@@ -738,6 +738,9 @@ script.on_event(defines.events.on_ai_command_completed,
         script.on_event(defines.events.on_selected_entity_changed,
             function(event)
                 game.print(event.name .. " " .. event.tick .." on_selected_entity_changed")
+                if game.players[event.player_index].selected and game.players[event.player_index].selected.type == "underground-belt" then
+                    game.print("belt_to_ground_type: " .. game.players[event.player_index].selected.belt_to_ground_type)
+                end
             end
         )
 

@@ -8,14 +8,14 @@ local debug = false
 local events_to_run = {}
 
 local player_names = {
-    'Cyclomactic',
-    'Phredward',
-    'mysticamber',
-    'Franqly/RuneBoggler',
-    'typical_guy',
-    'JeHor',
+    'Franqly',
+    'GlassBricks',
     'heartosis',
-    'thedoh/thePiedPiper'
+    'JeHor',
+    'mysticamber',
+    'Phredward',
+    'thedoh',
+    'thePiedPiper'
 }
 
 
@@ -28,6 +28,19 @@ local player_colors = {
     {.7,.5,1},
     {1,0,1},
     {1,1,1}
+}
+
+local misplaceable_chests = {
+    heart_chest_1={built_tick=1191, end_tick=2000,
+        x = -53.5, y = 90.5},
+    heart_chest_2={built_tick=8909, end_tick=2000000,
+        x = 223.5, y = 357.5},
+    phred_chest_1={built_tick=4126, end_tick=2000000,
+        x = 122.5, y = 4.5},
+    jehor_chest_1={built_tick=4615, end_tick=2000000,
+        x = 174.5, y = -64.5},
+    doh_chest_1={built_tick=6206, end_tick=2000000,
+        x = -0.5, y = 142.5},
 }
 
 local toggle_ignore_player = function(id, state, player_flow)
@@ -92,6 +105,7 @@ script.on_init(function()
     global.current_player_map = {}
     global.current_reversed_player_map = {}
     global.entity_highlights = {}
+    global.chests = {}
 end)
 
 
@@ -206,6 +220,9 @@ script.on_configuration_changed(function(config_change)
         end
         create_player({player_index = index})
     end
+    if not global.chests then
+        global.chests = {}
+    end
 end)
 
 script.on_event(defines.events.on_player_created, create_player)
@@ -308,42 +325,61 @@ local is_module = function(item_name)
     return string.find(item_name, "-module")
  end
 
+local is_in_misplaced_chest = function(x, y)
+    -- Tick check?
+    for chest_name, chest in pairs(misplaceable_chests) do
+        if global.chests[chest_name] then
+            if x == chest.x and y == chest.y then
+                return global.chests[chest_name]
+            end
+        end
+    end
+    return nil
+end
+
+local is_misplaced_chest = function(x, y)
+    -- Tick check?
+    for chest_name, chest in pairs(misplaceable_chests) do
+        if not global.chests[chest_name] then
+            if x > chest.x - 7 and x < chest.x + 7 and y > chest.y - 7 and y < chest.y + 7 then
+                local chests = game.surfaces[1].find_entities_filtered{area={{chest.x - 7, chest.y - 7}, {chest.x + 7, chest.y + 7}},
+                    type={'container'}}
+                if #chests ~= 1 then
+                    if not global.warned_chests then
+                        game.print("Missing chest near (" .. x .. ", " .. y .. ")")
+                        global.warned_chests = true
+                    end
+                else
+                    game.print('misplaced chest')
+                    game.print(serpent.line(chests[1]))
+                    game.print(serpent.line(chests[1].position))
+                    return {name=chest_name, entity=chests[1]}
+                end
+            end
+        end
+    end
+    game.print('no misplaced chest')
+    return nil
+end     
+
 local player_dropped = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
+    -- Handle chests being misplaced
+    if entity == nil and event.entity_name == "wooden-chest" then
+        local chest = is_in_misplaced_chest(event.position.x, event.position.y)
+        if chest ~= nil then
+            entity = chest.entity
+        else
+            chest = is_misplaced_chest(event.position.x, event.position.y)
+            if chest ~= nil then
+                global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
+                entity = chest.entity
+            end
+        end
+    end
     -- If they drop into something that doesn't exist, fine...
     if entity == nil then
-        -- Handle two chests left of burner city being misplaced
-        if not global.top_chest and global.tick < 10000 and event.entity_name == "wooden-chest"
-                and event.position.x < 101 and event.position.x > 94
-                and event.position.y < 7 and event.position.y > -3 and not global.top_chest then
-            chests = game.surfaces[1].find_entities_filtered{area={{94, -3}, {101, 7}},
-                type={'container'}}
-            if #chests ~= 2 then
-                if not global.warned_chests then
-                    game.print("Expected exactly two chests next to burner city")
-                    global.warned_chests = true
-                end
-            else
-                if chests[1].position.y < chests[2].position.y then
-                    global.top_chest = chests[1]
-                    global.bottom_chest = chests[2]
-                else
-                    global.top_chest = chests[2]
-                    global.bottom_chest = chests[1]
-                end
-            end
-        end
-        if global.top_chest and event.position.x == 98.5 then
-            if event.position.y == .5 then
-                entity = global.top_chest
-            elseif event.position.y == 3.5 then
-                entity = global.bottom_chest
-            else
-                return true
-            end
-        else
-            return true
-        end
+        return true
     end
     if event.entity_name == "burner-mining-drill" or entity.type == "furnace" or event.entity_name == "boiler" then
         local inv = entity.get_inventory(defines.inventory.fuel)
@@ -392,6 +428,18 @@ local player_took = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
     -- If they take from something that doesn't exist, fine...
     -- or if they're picking up the entity...
+    if entity == nil and event.entity_name == "wooden-chest" then
+        local chest = is_in_misplaced_chest(event.position.x, event.position.y)
+        if chest ~= nil then
+            entity = chest.entity
+        else
+            chest = is_misplaced_chest(event.position.x, event.position.y)
+            if chest ~= nil then
+                global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
+                entity = chest.entity
+            end
+        end
+    end
     if entity == nil or entity.name == event.item_name then
         if false and debug then
             game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
@@ -557,6 +605,11 @@ end
 local build_entity = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
     if entity and entity.name == event.name and (not event.ghost_name or entity.ghost_name == event.ghost_name) then
+        if entity.type == "underground-belt" and event.belt_to_ground_type ~= entity.belt_to_ground_type then
+            entity.rotate()
+        elseif entity.direction ~= event.direction then
+            entity.direction = event.direction
+        end
         return true
     end
     local build_check_type = defines.build_check_type.manual
@@ -566,11 +619,10 @@ local build_entity = function(event)
         check_name = event.ghost_name
     end
     if not game.surfaces["nauvis"].can_place_entity{
-        name = event.name,
+        name = check_name,
         position = event.position,
         direction = event.direction,
         force = "player",
-        inner_name = check_name,
         build_check_type = build_check_type,
     } then
         return false
@@ -649,6 +701,19 @@ script.on_event(defines.events.on_tick, function(tick_event)
         global.real_last_tick = -1
     end
     global.tick = global.tick + global.speed
+    -- At tick 1 give each player 8 iron plate if they are the first player but aren't
+    -- playing as jehor. If they aren't the first player but are playing as
+    -- jehor, remove 8 iron plate.
+    if global.tick >= 1 and global.real_last_tick < 1 then
+        for index, player in pairs(game.players) do
+            if index == 1 and global.current_player_map[index] ~= 4 then
+                player.get_main_inventory().insert({name="iron-plate", count=8})
+            end
+            if index ~= 1 and global.current_player_map[index] == 4 then
+                player.get_main_inventory().remove({name="iron-plate", count=8})
+            end
+        end
+    end
     local new_tick = math.floor(global.tick)
     if global.tick_label then
         global.tick_label.caption = tostring(new_tick)

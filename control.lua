@@ -16,14 +16,14 @@ local prev_entity_contents = {}
 local debug_player = 0
 
 local player_mapping = {
-    6,
-    3,
+    4,
     5,
+    6,
     7,
     8,
-    4,
-    2,
     1,
+    2,
+    3,
 }
 
 -- Entities we set recipes on. Yeesh.

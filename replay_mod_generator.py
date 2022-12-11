@@ -24,6 +24,15 @@ def fix_event(event):
     event_type = event['event_type']
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
+
+    # This underground is later reversed by dragging belt, but there's no events for that...
+    if event_type == 'on_built_entity' and event['name'] == "underground-belt" and y == -90.5 and (x == 218.5 or x == 213.5):
+        if x == 213.5:
+            event['belt_to_ground_type'] = 'output'
+        else:
+            event['belt_to_ground_type'] = 'input'
+
+    '''
     # iron line from heartosis to typical_guy
     if player_index == 7 and tick >= 167032:
         if event_type != 'on_player_changed_position':
@@ -75,6 +84,7 @@ def fix_event(event):
     # Accidentally dropping steel plates in rail chests
     if x in (281.5, 285.5) and y == 6.5 and event_type == 'player_dropped' and event['item_name'] == 'steel-plate':
         return []
+    '''
     return [event]
 
 def main():
