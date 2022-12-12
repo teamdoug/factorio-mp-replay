@@ -109,6 +109,8 @@ def main():
                 f.write(line)
                 continue
             event = filter_replay.parse_line(line)
+            if event['event_type'] in ('raw_on_player_cancelled_crafting',):
+                continue
             if event['event_type'] in ('on_pre_player_crafted_item', 'on_player_cancelled_crafting'):
                 craft_queue = craft_queues[event['player_index']]
                 if event['event_type'] == 'on_pre_player_crafted_item':
