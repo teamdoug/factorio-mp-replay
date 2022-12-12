@@ -115,16 +115,16 @@ def main():
                 continue
             line = line[line.index('rlog: ') + 6:]
             parsed = parse_line(line)
-            if not parsed.get('position'):
-                continue
-            x = parsed['position']['x']
-            y = parsed['position']['y']
-            if parsed['tick'] >= 167032 and parsed['player_index'] == 7:
-                if parsed["event_type"] != 'on_player_changed_position':
+            #if not parsed.get('position'):
+                #continue
+            #x = parsed['position']['x']
+            #y = parsed['position']['y']
+            if parsed['tick'] >= 74000 and parsed['player_index'] == 5:
+                if parsed["event_type"] not in ('on_player_changed_position', 'player_took'):
                     f.write(line + '\n')
             
-            if abs(x) > 420 or abs(y) > 355:
-                print(x, y)
+            #if abs(x) > 420 or abs(y) > 355:
+                #print(x, y)
             continue
             if parsed["event_type"] == 'on_player_changed_position':
                 continue

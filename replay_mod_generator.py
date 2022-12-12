@@ -1,3 +1,4 @@
+import csv
 import shutil
 import filter_replay
 import copy
@@ -87,6 +88,8 @@ def fix_event(event):
     '''
     return [event]
 
+craft_queues = {i+1: [] for i in range(8)}
+
 def main():
     with open('replay.log') as f:
         text = f.read()
@@ -106,6 +109,25 @@ def main():
                 f.write(line)
                 continue
             event = filter_replay.parse_line(line)
+            if event['event_type'] in ('on_pre_player_crafted_item', 'on_player_cancelled_crafting'):
+                craft_queue = craft_queues[event['player_index']]
+                if event['event_type'] == 'on_pre_player_crafted_item':
+                    craft_queue.append(event)
+                else:
+                    product = event['product']
+                    delete_index = None
+                    for index, item in enumerate(reversed(craft_queue)):
+                        if item['product'] == product:
+                            if event['cancel_count'] < item['queued_count']:
+                                item['queued_count'] -= event['cancel_count']
+                            else:
+                                delete_index = len(craft_queue) - index - 1
+                            break
+                    else:
+                        raise Exception('bad cancel: ' + str(event))
+                    if delete_index is not None:
+                        craft_queue.pop(delete_index)
+                continue
             events = fix_event(event)
             for event in events:
                 if first:
@@ -115,6 +137,29 @@ def main():
                 f.write(unparse(event))
         f.write('}')
     shutil.copy(r'C:/Program Files/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    for player_index, craft_queue in craft_queues.items():
+        squashed_queue = []
+        for index, item in enumerate(craft_queue):
+            if index == 0:
+                squashed_queue.append(item)
+                continue
+            # Squash two crafts of the same thing within 10 seconds of each other. Sure.
+            if item['product'] == squashed_queue[-1]['product'] and item['tick'] < squashed_queue[-1]['tick'] + 600:
+                squashed_queue[-1]['queued_count'] += item['queued_count']
+            else:
+                squashed_queue.append(item)
+        with open(f'queue_{player_index}.csv', 'w') as f:
+            csvwriter = csv.DictWriter(f, fieldnames=['timestamp', 'quantity', 'image', 'name'], lineterminator='\n')
+            csvwriter.writeheader()
+            for item in squashed_queue:
+                quantity = f'{item["queued_count"]}'
+                if item['amount'] > 1:
+                    quantity += f'x{item["amount"]}'
+                fname = item['product'][0].upper() + item['product'][1:].replace('-', '_')
+                fname = fname.replace('Long_handed', 'Long-handed')
+                image = f'=image("https://wiki.factorio.com/images/thumb/{fname}.png/24px-{fname}.png")'
+                csvwriter.writerow({'timestamp': f'{item["tick"]//3600:02d}:{(item["tick"]//60)%60:02d}', 'quantity': quantity, 'image': image, 'name': fname.replace('_', ' ')})
+
 
 if __name__ == '__main__':
     main()

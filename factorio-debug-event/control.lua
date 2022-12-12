@@ -322,6 +322,11 @@ script.on_event(defines.events.on_ai_command_completed,
         script.on_event(defines.events.on_player_cancelled_crafting,
             function(event)
                 game.print(event.name .. " " .. event.tick .." on_player_cancelled_crafting")
+                if game.players[event.player_index].crafting_queue ~= nil then
+                    for index, item in pairs(game.players[event.player_index].crafting_queue) do
+                        game.print(index .. ': ' .. item.recipe .. ' x' .. item.count .. '. prereq: ' .. tostring(item.prerequisite))
+                    end
+                end
             end
         )
         script.on_event(defines.events.on_player_changed_force,
@@ -601,6 +606,9 @@ script.on_event(defines.events.on_ai_command_completed,
         script.on_event(defines.events.on_pre_player_crafted_item,
             function(event)
                 game.print(event.name .. " " .. event.tick .." on_pre_player_crafted_item")
+                for index, item in pairs(game.players[event.player_index].crafting_queue) do
+                    game.print(index .. ': ' .. item.recipe .. ' x' .. item.count .. '. prereq: ' .. tostring(item.prerequisite))
+                end
             end
         )
         script.on_event(defines.events.on_pre_player_died,
