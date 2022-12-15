@@ -16,6 +16,10 @@ def unparse(obj):
         return f'"{obj}"'
     elif isinstance(obj, (int, float)):
         return str(obj)
+    elif obj is True:
+        return 'true'
+    elif obj is False:
+        return 'false'
     raise ValueError(str(obj))
 
 def fix_event(event):
@@ -27,12 +31,13 @@ def fix_event(event):
     x, y = event['position']['x'], event['position']['y']
 
     # This underground is later reversed by dragging belt, but there's no events for that...
-    if event_type == 'on_built_entity' and event['name'] == "underground-belt" and y == -90.5 and (x == 218.5 or x == 213.5):
-        if x == 213.5:
-            event['belt_to_ground_type'] = 'output'
-        else:
-            event['belt_to_ground_type'] = 'input'
-
+    # Prevent initial accidental rotation
+    if event_type == 'on_player_rotated_entity' and event['name'] == "underground-belt" and tick == 96057:
+        return []
+    # Don't build/deconstruct bad miner.
+    if x == 62.5 and y == 52.5:
+        return []
+        
     '''
     # iron line from heartosis to typical_guy
     if player_index == 7 and tick >= 167032:

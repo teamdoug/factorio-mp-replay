@@ -11,11 +11,14 @@ local player_hand_locations = {}
 local last_moved = {[1] = 0}
 local last_position = {[1] = {0, 0}}
 local crafting_queues = {}
+local walking_states = {}
 for i=1,8 do
     crafting_queues[i] = {}
+    walking_states[i] = {}
 end
 
 local prev_entity_contents = {}
+
 
 local debug_player = 0
 
@@ -921,5 +924,45 @@ function(event)
     end
 
     player_inventories[event.player_index] = cur_inv
+end
+)
+
+script.on_event(defines.events.on_player_flushed_fluid,
+function(event)
+    slog({event_type="on_player_flushed_fluid",
+    tick=event.tick,
+    player_index=event.player_index,
+    fluid=event.fluid,
+    only_this_entity=event.only_this_entity,
+    position=event.entity.position,
+    name=event.entity.name,
+    type=event.entity.type})
+end
+)
+
+script.on_event(defines.events.on_marked_for_deconstruction ,
+function(event)
+    slog({event_type="on_marked_for_deconstruction",
+    tick=event.tick,
+    player_index=event.player_index,
+    position=event.entity.position,
+    name=event.entity.name,
+    type=event.entity.type})
+end
+)
+
+script.on_event(defines.events.on_picked_up_item ,
+function(event)
+    local inv = player_inventories[event.player_index]
+    if not inv[event.item_stack.name] then
+        inv[event.item_stack.name] = event.item_stack.count
+    else
+        inv[event.item_stack.name] = inv[event.item_stack.name] + event.item_stack.count
+    end
+    slog({event_type="on_picked_up_item",
+    tick=event.tick,
+    player_index=event.player_index,
+    position=game.players[event.player_index].position,
+    item_stack=event.item_stack})
 end
 )

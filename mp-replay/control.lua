@@ -5,8 +5,6 @@ local player_events = require("player_events")
 local debug = false
 
 
-local events_to_run = {}
-
 local player_names = {
     'Franqly',
     'GlassBricks',
@@ -106,6 +104,7 @@ script.on_init(function()
     global.current_reversed_player_map = {}
     global.entity_highlights = {}
     global.chests = {}
+    global.events_to_run = {}
 end)
 
 
@@ -350,15 +349,11 @@ local is_misplaced_chest = function(x, y)
                         global.warned_chests = true
                     end
                 else
-                    game.print('misplaced chest')
-                    game.print(serpent.line(chests[1]))
-                    game.print(serpent.line(chests[1].position))
                     return {name=chest_name, entity=chests[1]}
                 end
             end
         end
     end
-    game.print('no misplaced chest')
     return nil
 end     
 
@@ -374,11 +369,16 @@ local player_dropped = function(event)
             if chest ~= nil then
                 global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
                 entity = chest.entity
+            else
+                game.print(player_names[event.player_index] .. ' found no chest near (' .. x .. ", " .. y .. ")")
             end
         end
     end
-    -- If they drop into something that doesn't exist, fine...
+    -- If they drop into something that doesn't exist, try again for a bit if it's a red science pack...
     if entity == nil then
+        if event.item_name == 'automation-science-pack' then
+            return false
+        end
         return true
     end
     if event.entity_name == "burner-mining-drill" or entity.type == "furnace" or event.entity_name == "boiler" then
@@ -395,7 +395,7 @@ local player_dropped = function(event)
         if is_module(event.item_name) then
             local mod_inv = entity.get_inventory(defines.inventory.assembling_machine_modules)
             if mod_inv[1].valid_for_read and mod_inv[2].valid_for_read and event.item_name == mod_inv[1].name then
-            elseif entity.get_recipe() and entity.get_recipe().name == "rocket-control-unit" then
+            elseif entity.get_recipe() and (entity.get_recipe().name == "rocket-control-unit" or is_module(entity.get_recipe().name)) then
             else
                 inv_type = defines.inventory.assembling_machine_modules
             end
@@ -441,7 +441,7 @@ local player_took = function(event)
         end
     end
     if entity == nil or entity.name == event.item_name then
-        if false and debug then
+        if debug then
             game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
                 event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but the entity didn't exist")
         end
@@ -625,6 +625,10 @@ local build_entity = function(event)
         force = "player",
         build_check_type = build_check_type,
     } then
+        if not game.surfaces[1].is_chunk_generated({event.position.x / 32, event.position.y / 32}) then
+            game.surfaces[1].request_to_generate_chunks(event.position, 0)
+            return false
+        end
         return false
     end
     entity = game.surfaces["nauvis"].create_entity{
@@ -681,6 +685,60 @@ local on_player_changed_position = function(event)
     return true
 end
 
+local on_player_flushed_fluid = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil or entity.type ~= event.type then
+        if debug then
+            game.print("failed to flush fluid at " .. event.position)
+        end
+        -- Presumably players are only flushing their own fluids, so ignore it?
+        return true
+    end
+    entity.fluidbox.flush(1, event.fluid)
+    return true
+end
+
+local on_marked_for_deconstruction = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil or entity.type ~= event.type then
+        if debug then
+            game.print("failed to deconstruct entity at " .. event.position)
+        end
+        -- It's already deconstructed??
+        return true
+    end
+    entity.order_deconstruction(game.forces.player)
+    return true
+end
+
+local on_picked_up_item = function(event)
+
+    -- player item_pickup_radius is 1
+    local items = game.surfaces[1].find_entities_filtered{position=event.position, radius=1, name="item-on-ground"}
+    if #items > 0 then
+        for _, item in pairs(items) do
+            if item.stack.name == event.item_stack.name then
+                item.destroy()
+                return true
+            end
+        end
+    end
+    -- use a larger radius since we might be grabbing from the near side
+    local belts = game.surfaces[1].find_entities_filtered{position=event.position, radius=1.5, type="transport-belt"}
+    -- We could use this info to target better, but we don't ^^
+    -- Belt transport line 1 is left side looking at direction it's going
+    -- position 0 is entrance, 1 is exit
+    if #belts > 0 then
+        for _, belt in pairs(belts) do
+            if belt.get_item_count(event.item_stack.name) > 0 then 
+                belt.remove_item({name=event.item_stack.name, count=100})
+                return true
+            end
+        end
+    end
+    return true
+end
+
 local totime = function(tick)
     hour = math.floor(tick / 3600 / 60)
     minute = math.floor(tick / 60 / 60) % 60
@@ -726,9 +784,9 @@ script.on_event(defines.events.on_tick, function(tick_event)
             game.print("lost tick " .. tick - 1)
         end
         global.real_last_tick = tick
-        if tick % 300 == 0 and #events_to_run > 0 then
+        if tick % 300 == 0 and #global.events_to_run > 0 then
             if debug then
-                game.print(#events_to_run .. " events are failing to run")
+                game.print(#global.events_to_run .. " events are failing to run")
             end
         end
         while global.mp_event_index <= #player_events and tick >= player_events[global.mp_event_index].tick do
@@ -738,12 +796,12 @@ script.on_event(defines.events.on_tick, function(tick_event)
                 global.player_directions[ev.player_index] = ev.direction
             end
             if not global.ignored_player_map[ev.player_index] then
-                table.insert(events_to_run, ev)
+                table.insert(global.events_to_run, ev)
             end
             global.mp_event_index = global.mp_event_index + 1
         end
         local new_events_to_run = {}
-        for _, event in ipairs(events_to_run) do
+        for _, event in ipairs(global.events_to_run) do
             if (tick - event.tick) % 60 ~= 0 then
                 table.insert(new_events_to_run, event)
             else
@@ -771,6 +829,12 @@ script.on_event(defines.events.on_tick, function(tick_event)
                     noerr, success = pcall(on_research_started, event)
                 elseif event.event_type == "on_player_changed_position" then
                     noerr, success = pcall(on_player_changed_position, event)
+                elseif event.event_type == "on_player_flushed_fluid" then
+                    noerr, success = pcall(on_player_flushed_fluid, event)
+                elseif event.event_type == "on_marked_for_deconstruction" then
+                    noerr, success = pcall(on_marked_for_deconstruction, event)
+                elseif event.event_type == "on_picked_up_item" then
+                    noerr, success = pcall(on_picked_up_item, event)
                 else
                     success = true
                     if debug then
@@ -787,14 +851,14 @@ script.on_event(defines.events.on_tick, function(tick_event)
                             game.print("failed to execute event: " .. serpent.line(event))
                         end
                     end
-                    -- Try again for up to 60 secs
-                    if tick - event.tick < 60 * 60 then
+                    -- Try again for up to 60 secs or 5 min if it's an automation science pack
+                    if tick - event.tick < 60 * 60 or (event.item_name == 'automation-science-pack' and tick - event.tick < 5 * 60 * 60) then
                         table.insert(new_events_to_run, event)
                     end
                 end
             end
         end
-        events_to_run = new_events_to_run
+        global.events_to_run = new_events_to_run
     end
     global.last_tick = new_tick
 

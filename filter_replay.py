@@ -35,6 +35,10 @@ def parse_table_helper(line, start):
                 raise ValueError("Unexpected comma")
             if '.' in cur_val:
                 result[cur_key] = float(cur_val)
+            elif cur_val == 'true':
+                result[cur_key] = True
+            elif cur_val == 'false':
+                result[cur_key] = False
             else:
                 result[cur_key] = int(cur_val)
             cur_key = ''
@@ -87,6 +91,10 @@ def parse_table_helper(line, start):
                 raise ValueError("Unexpected }")
             if '.' in cur_val:
                 result[cur_key] = float(cur_val)
+            elif cur_val == 'true':
+                result[cur_key] = True
+            elif cur_val == 'false':
+                result[cur_key] = False
             else:
                 result[cur_key] = int(cur_val)
             return result, i+1
