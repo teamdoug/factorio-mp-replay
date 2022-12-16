@@ -69,6 +69,7 @@ local toggle_ignore_player = function(id, state, player_flow)
             alignment = "center",
             color = player_colors[id],
             scale = 2,
+            scale_with_zoom = true,
         }
     end
     for _, player in pairs(game.players) do
@@ -426,8 +427,6 @@ end
 
 local player_took = function(event)
     local entity = game.surfaces["nauvis"].find_entity(event.entity_name, event.position)
-    -- If they take from something that doesn't exist, fine...
-    -- or if they're picking up the entity...
     if entity == nil and event.entity_name == "wooden-chest" then
         local chest = is_in_misplaced_chest(event.position.x, event.position.y)
         if chest ~= nil then
@@ -440,12 +439,14 @@ local player_took = function(event)
             end
         end
     end
+    -- If they take from something that doesn't exist, try again...
+    -- or if they're picking up the entity (?)...
     if entity == nil or entity.name == event.item_name then
         if debug then
             game.print(player_names[event.player_index] .. " tried to take " .. event.count .. " " ..
                 event.item_name .. " from a " .. event.entity_name .. " at " .. serpent.line(event.position) .. " but the entity didn't exist")
         end
-        return true
+        return false
     end
     -- We could also try to detect taking from inputs of an assembling-machine based on types...
     if entity.type == "furnace" or entity.type == "assembling-machine" then
