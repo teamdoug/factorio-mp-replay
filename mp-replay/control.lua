@@ -674,7 +674,7 @@ script.on_event(defines.events.on_entity_destroyed, function(event)
 end)
 
 local on_research_started = function(event)
-    if global.ignored_player_map[5] then
+    if global.ignored_player_map[1] then
         return true
     end
     return game.forces.player.add_research(event.name)
