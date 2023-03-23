@@ -203,6 +203,9 @@ end
 
 script.on_configuration_changed(function(config_change)
     local old_version = config_change.mod_changes['mp-replay'].old_version
+    if old_version == nil then
+        return
+    end
     local ver_nums = {}
     for v in old_version:gmatch("(%d+)") do
         table.insert(ver_nums, tonumber(v))
