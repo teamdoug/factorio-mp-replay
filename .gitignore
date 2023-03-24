@@ -5,4 +5,4 @@ move.log
 replay.log
 mp-replay*.zip
 filtered_replay.log
-old versions/queue*.csv
+queue*.csv

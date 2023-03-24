@@ -340,7 +340,7 @@ local is_in_misplaced_chest = function(x, y)
     return nil
 end
 
-local is_misplaced_chest = function(x, y)
+local is_misplaced_chest = function(x, y, event)
     -- Tick check?
     for chest_name, chest in pairs(misplaceable_chests) do
         if not global.chests[chest_name] then
@@ -369,7 +369,7 @@ local player_dropped = function(event)
         if chest ~= nil then
             entity = chest.entity
         else
-            chest = is_misplaced_chest(event.position.x, event.position.y)
+            chest = is_misplaced_chest(event.position.x, event.position.y, event)
             if chest ~= nil then
                 global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
                 entity = chest.entity
@@ -435,7 +435,7 @@ local player_took = function(event)
         if chest ~= nil then
             entity = chest.entity
         else
-            chest = is_misplaced_chest(event.position.x, event.position.y)
+            chest = is_misplaced_chest(event.position.x, event.position.y, event)
             if chest ~= nil then
                 global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
                 entity = chest.entity

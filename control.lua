@@ -22,16 +22,35 @@ local prev_entity_contents = {}
 
 local debug_player = 0
 
-local player_mapping = {
-    4,
-    5,
-    6,
-    7,
-    8,
-    1,
-    2,
-    3,
+-- The order players are in your planning docs.
+-- Needs to match mp-replay/control.lua's player_names.
+local player_names = {
+    'Franqly',
+    'GlassBricks',
+    'heartosis',
+    'JeHor',
+    'mysticamber',
+    'Phredward',
+    'thedoh',
+    'thePiedPiper'
 }
+
+-- The order of players in the replay. Names don't need to match player_names.
+local player_mapping = {
+    'GlassBricks',
+    'heartosis',
+    'Franqly',
+    'JeHor',
+    'mysticamber',
+    'thePiedPiper',
+    'thedoh',
+    'Phredward',
+}
+
+local reverse_player_names = {}
+for i, name in ipairs(player_names) do
+	reverse_player_names[name] = i
+end
 
 -- Entities we set recipes on. Yeesh.
 local assembler_entities = {
@@ -55,10 +74,10 @@ local p2
 
 local function slog(ltable)
     if ltable.player_index then
-        ltable.player_index = player_mapping[ltable.player_index]
+        ltable.player_index = reverse_player_names[player_mapping[ltable.player_index]]
     end
     if ltable.to_player_index then
-        ltable.to_player_index = player_mapping[ltable.to_player_index]
+        ltable.to_player_index = reverse_player_names[player_mapping[ltable.to_player_index]]
     end
     table.insert(message_buffer, serpent.line(ltable))
     if #message_buffer >= 50 then
@@ -544,6 +563,10 @@ end)
 
 script.on_event(defines.events.on_player_crafted_item,
     function(event)
+        -- Disabled
+        if true then
+            return
+        end
         local player = game.get_player(event.player_index)
         if player.crafting_queue[1].prerequisite then
             return
@@ -572,6 +595,10 @@ script.on_event(defines.events.on_player_crafted_item,
 
 script.on_event(defines.events.on_pre_player_crafted_item,
     function(event)
+        -- Disabled
+        if true then
+            return
+        end
         local inv = player_inventories[event.player_index]
         local curs = player_cursor_stacks[event.player_index]
         local products = event.recipe.products
@@ -623,6 +650,10 @@ script.on_event(defines.events.on_pre_player_crafted_item,
 )
 
 function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, expect_same)
+    -- Disable this for now.
+    if true then
+        return
+    end
     if expect_same then
         -- full inventories boo
         return
@@ -656,7 +687,7 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
     end
 
     if #abr_real_queue < #crafting_queue - 1 then
-        game.print('Cable cancel hit two different outputs?')
+        --game.print('Cable cancel hit two different outputs?')
         return
     end
     if #abr_real_queue == #crafting_queue then
@@ -724,6 +755,10 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
 end
 
 function dump_queue(event, real_crafting_queue, crafting_queue)
+    -- Disabled
+    if true then
+        return
+    end
     if event.name == defines.events.on_player_cancelled_crafting then
         game.print('Error in cancel of ' .. event.cancel_count .. ' ' .. event.recipe.name .. ' for ' .. game.players[event.player_index].name)
     elseif event.name == defines.events.on_pre_player_crafted_item then
@@ -743,6 +778,10 @@ end
 
 script.on_event(defines.events.on_player_cancelled_crafting,
     function(event)
+        -- Disabled
+        if true then
+            return
+        end
         local products = event.recipe.products
         local crafting_queue = crafting_queues[event.player_index]
         local real_crafting_queue = game.players[event.player_index].crafting_queue

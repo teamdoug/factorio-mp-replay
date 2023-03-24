@@ -3,10 +3,12 @@ import shutil
 import filter_replay
 import copy
 
-def copy_event(event, x, y):
+def copy_event(event, x, y, player_index=None):
     ev = copy.deepcopy(event)
     ev['position']['x'] = x
     ev['position']['y'] = y
+    if player_index is not None:
+        ev['player_index'] = player_index
     return ev
 
 def unparse(obj):
@@ -32,11 +34,67 @@ def fix_event(event):
 
     # This underground is later reversed by dragging belt, but there's no events for that...
     # Prevent initial accidental rotation
+    if event_type == 'on_player_rotated_entity' and event['name'] == "underground-belt" and tick == 148729:
+        return []
+    
+    if event_type == 'set_recipe' and x == 317.5 and y == 292.5 and event['recipe'] == "copper-cable":
+        event['recipe'] = 'electronic-circuit'
+        return [event]
+    
+    if event_type == 'player_took' and tick in (4999, 5030, 5061, ):
+        return []
+    
+    if event_type == 'on_built_entity':
+        if x == 348.5 and y == 179.5:
+            return [event, copy_event(event, 348.5, 182.5), copy_event(event, 348.5, 188.5)]
+        if x == 92.5 and y == 170.5:
+            return [copy_event(event, x, 171.5)]
+        if x == 115.5 and y == 165.5:
+            return [event, copy_event(event, 114.5, 165.5)]
+        if x == 346.5 and y == 232.5:
+            return [copy_event(event, 345.5, y)]
+        if x == 331.5 and y == 232.5:
+            return [copy_event(event, 330.5, y)]
+        if x == 279.5 and y == 241.5:
+            return [event, copy_event(event, 280.5, 241.5)]
+        if x == 307.5 and y == 274.5:
+            return [event, copy_event(event, 306.5, 274.5)]
+        if x == 300.5 and y == 261.5:
+            return [event, copy_event(event, 301.5, 261.5)]
+        if x == 299.5 and y == 299.5:
+            return [event, copy_event(event, 300.5, 299.5)]
+        if x == 306.5 and y == 290.5:
+            return [copy_event(event, 307.5, 290.5)]
+        if x == 307.5 and y == 290.5:
+            return [copy_event(event, 306.5, 290.5)]
+        if player_index == 6 and ((x == 108.5 and y == 139.5) or (x in (107.5, 108.5) and y == 140.5)):
+            event['direction'] = 4
+            return [event, copy_event(event, x, y, player_index=4)]
+        if player_index == 6 and x in (108.5, 109.5, 110.5) and y == 139.5:
+            return []
+        if player_index == 6 and x in (107.5, 108.5, 109.5) and y == 140.5:
+            return []
+        if player_index == 4 and x in (107.5, 108.5) and y >= 139.5 and y <= 148.5:
+            return [event, copy_event(event, x, y, player_index=6)]
+        if player_index == 6 and x == 42.5 and y >= 135.5 and y <= 139.5:
+            return [event, copy_event(event, x, y, player_index=4)]
+        if (x == 109.5 and y == 113) or (x == 108.5 and y == 114) or (x == 145.5 and y == 133):
+            return [event, {'event_type': "set_splitter", 'name': "splitter", 'player_index': 4, 'position': {'x': x, 'y': y}, 'splitter_input_priority': "left", 'splitter_output_priority': "left", 'tick': tick, 'type': "splitter"}]
+        if x == 329.5 and y == 229.5:
+            event['direction'] = 2
+            return [event]
+    if event_type == 'on_player_rotated_entity':
+        if player_index == 4 and x in (107.5, 108.5) and y in (139.5, 140.5):
+            return []
+    '''
+    # This underground is later reversed by dragging belt, but there's no events for that...
+    # Prevent initial accidental rotation
     if event_type == 'on_player_rotated_entity' and event['name'] == "underground-belt" and tick == 96057:
         return []
     # Don't build/deconstruct bad miner.
     if x == 62.5 and y == 52.5:
         return []
+        '''
         
     '''
     # iron line from heartosis to typical_guy
@@ -98,7 +156,7 @@ craft_queues = {i+1: [] for i in range(8)}
 def main():
     with open('replay.log') as f:
         text = f.read()
-    with open(r'C:/Program Files/Factorio/mods/mp-replay/player_events.lua', 'w') as f:
+    with open(r'C:/Program Files/Factorio_1.1.78/mods/mp-replay/player_events.lua', 'w') as f:
         f.write('return {')
         first = True
         for line in text.splitlines():
@@ -143,7 +201,7 @@ def main():
                     f.write(',\n')
                 f.write(unparse(event))
         f.write('}')
-    shutil.copy(r'C:/Program Files/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    shutil.copy(r'C:/Program Files/Factorio_1.1.78/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
     for player_index, craft_queue in craft_queues.items():
         squashed_queue = []
         for index, item in enumerate(craft_queue):
