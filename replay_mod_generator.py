@@ -83,6 +83,9 @@ def fix_event(event):
         if x == 329.5 and y == 229.5:
             event['direction'] = 2
             return [event]
+        if x == 49.5 and y == -30:
+            return [event, {'count': 19, 'entity_name': "boiler", 'event_type': "player_dropped", 'item_name': "coal", 'player_index': 6, 'position': {'x': 49.5, 'y': -30}, 'tick': event['tick']},]
+
     if event_type == 'on_player_rotated_entity':
         if player_index == 4 and x in (107.5, 108.5) and y in (139.5, 140.5):
             return []
