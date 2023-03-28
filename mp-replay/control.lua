@@ -330,10 +330,11 @@ local is_module = function(item_name)
 
 local is_in_misplaced_chest = function(x, y)
     -- Tick check?
-    for chest_name, chest in pairs(misplaceable_chests) do
+    for chest_name, _ in pairs(misplaceable_chests) do
         if global.chests[chest_name] then
+            local chest = global.chests[chest_name]
             if x == chest.x and y == chest.y then
-                return global.chests[chest_name]
+                return chest
             end
         end
     end
@@ -371,7 +372,7 @@ local player_dropped = function(event)
         else
             chest = is_misplaced_chest(event.position.x, event.position.y, event)
             if chest ~= nil then
-                global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
+                global.chests[chest.name] = {entity=chest.entity, x=event.position.x, y=event.position.y}
                 entity = chest.entity
             else
                 game.print(player_names[event.player_index] .. ' found no chest near (' .. x .. ", " .. y .. ")")
@@ -437,7 +438,7 @@ local player_took = function(event)
         else
             chest = is_misplaced_chest(event.position.x, event.position.y, event)
             if chest ~= nil then
-                global.chests[chest.name] = {entity=chest.entity, x=chest.entity.position.x, y=chest.entity.position.y}
+                global.chests[chest.name] = {entity=chest.entity, x=event.position.x, y=event.position.y}
                 entity = chest.entity
             end
         end
