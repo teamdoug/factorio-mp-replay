@@ -54,7 +54,7 @@ for i, name in ipairs(player_names) do
 	reverse_player_names[name] = i
 end
 
--- Entities we set recipes on. Yeesh.
+-- Entities we set recipes on. Yeesh. I guess entity.type isn't set on bps?
 local assembler_entities = {
     ["assembling-machine-1"] = true,
     ["assembling-machine-2"] = true,
@@ -66,6 +66,9 @@ local container_entities = {
     ["iron-chest"] = true,
     ["wooden-chest"] = true,
     ["steel-chest"] = true,
+}
+local splitter_entities = {
+    ["splitter"] = true,
 }
 
 local player_bps = {}
@@ -421,7 +424,7 @@ script.on_event(defines.events.on_tick, function(event)
         local player = game.get_player(i)
         if player and player.character and event.tick > last_moved[i] + 30 then
             if last_position[i][1] ~= player.position.x or last_position[i][2] ~= player.position.y then 
-                local p2 = game.create_profiler()
+                --local p2 = game.create_profiler()
                 slog({event_type="on_player_changed_position",
                     tick=event.tick,
                     player_index=i,
@@ -439,6 +442,7 @@ script.on_event(defines.events.on_tick, function(event)
                 local have_recipes = {}
                 local bar
                 local bp_entities = player.cursor_stack.get_blueprint_entities()
+                local splitter_setting
                 if not bp_entities then
                     bp_entities = {}
                 end
@@ -456,6 +460,32 @@ script.on_event(defines.events.on_tick, function(event)
                             bar = entity.bar
                         end
                         have_entities[entity.name] = entity.name
+                    elseif splitter_entities[entity.name] then
+                        have_entities[entity.name] = entity.name
+                        -- Alas, splitter properties don't exist on bp entites, so assume any changes are us ;;
+                        --[[
+                        local new_splitter_setting = {
+                            splitter_input_priority = entity.splitter_input_priority,
+                            splitter_output_priority = entity.splitter_output_priority,
+                        }
+                        if entity.splitter_filter then
+                            new_splitter_setting.splitter_filter = entity.splitter_filter.name
+                        end
+                        if splitter_setting and (
+                            splitter_setting.splitter_input_priority ~= new_splitter_setting.splitter_input_priority
+                            or splitter_setting.splitter_output_priority ~= new_splitter_setting.splitter_output_priority
+                            or splitter_setting.splitter_filter ~= new_splitter_setting.splitter_filter
+                        )  then
+                            game.print('Multiple splitter settings in BP for player ' .. player.name .. ': '
+                                .. serpent.line(splitter_seting) .. ' vs ' .. serpent.line(new_splitter_setting))
+                        end
+                        splitter_setting = new_splitter_setting
+                        game.print('spltiter setting' .. serpent.line(new_splitter_setting))
+                        game.print('spltiter setting' .. serpent.line(entity.splitter_input_priority))
+                        for name, val in pairs(entity) do
+                            game.print(name .. ': ' .. serpent.line(val))
+                        end
+                        ]]
                     end
                 end
                 if next(have_entities) then
@@ -463,6 +493,7 @@ script.on_event(defines.events.on_tick, function(event)
                     local orig_recipes = {}
                     local orig_bars = {}
                     local orig_directions = {}
+                    local orig_splitters = {}
                     for j, entity in ipairs(entities) do
                         if entity.type == "assembling-machine" then
                             orig_recipes[j] = entity.get_recipe() and entity.get_recipe().name
@@ -471,9 +502,19 @@ script.on_event(defines.events.on_tick, function(event)
                         if bar and entity.type == "container" then
                             orig_bars[j] = entity.get_inventory(defines.inventory.chest).get_bar()
                         end
+                        if entity.type == "splitter" then
+                            orig_splitters[j] = {
+                                splitter_input_priority = entity.splitter_input_priority,
+                                splitter_output_priority = entity.splitter_output_priority,
+                            }
+                            if entity.splitter_filter then
+                                orig_splitters[j].splitter_filter = entity.splitter_filter.name
+                            end
+                        end
                     end
-                    player_bps[i] = {entities = entities, item_number = player.cursor_stack.item_number, bar = bar, have_recipes = have_recipes,
-                        have_entities = have_entities, orig_bars = orig_bars, orig_recipes = orig_recipes, orig_directions = orig_directions}
+                    player_bps[i] = {entities = entities, item_number = player.cursor_stack.item_number, bar = bar, splitter_setting = splitter_setting,
+                        have_recipes = have_recipes, have_entities = have_entities, orig_bars = orig_bars, orig_recipes = orig_recipes,
+                        orig_directions = orig_directions, orig_splitters = orig_splitters}
                     --log("bp")
                     --log(serpent.line(player_bps[i]))
                 else
@@ -481,6 +522,7 @@ script.on_event(defines.events.on_tick, function(event)
                 end
             end
             local bp = player_bps[i]
+            -- Ideally, we would track others' known changes to ignore them here...
             for j, entity in ipairs(bp.entities) do
                 if not entity.valid then
                 elseif entity.type == "assembling-machine" then
@@ -510,7 +552,7 @@ script.on_event(defines.events.on_tick, function(event)
                 elseif entity.type == "container" and bp.bar then
                     local bar = entity.get_inventory(defines.inventory.chest).get_bar()
                     -- logic completely untested
-                    if bar ~= orig_bars[j] and bar ~= bp.bar then
+                    if bar ~= bp.orig_bars[j] and bar ~= bp.bar then
                         --[[slog({event_type="set_bar",
                             tick=event.tick,
                             player_index=i,
@@ -519,6 +561,34 @@ script.on_event(defines.events.on_tick, function(event)
                             type=entity.type,
                             recipe=recipe.name,
                         })]]
+                    end
+                -- I don't know how bp.orig_splitters[j] can be nil, but it can...
+                elseif entity.type == "splitter" and bp.orig_splitters[j] then
+                    local filter
+                    if entity.splitter_filter then
+                        filter = entity.splitter_filter.name
+                    end
+                    if (
+                        bp.orig_splitters[j].splitter_input_priority ~= entity.splitter_input_priority
+                        or bp.orig_splitters[j].splitter_output_priority ~= entity.splitter_output_priority
+                        or bp.orig_splitters[j].splitter_filter ~= filter
+                    ) then
+                        -- Should check that new settings match the bp settings, but we don't have that...
+                        slog({event_type="set_splitter",
+                            tick=event.tick,
+                            player_index=i,
+                            position=entity.position,
+                            name=entity.name,
+                            type=entity.type,
+                            filter=filter,
+                            splitter_input_priority=entity.splitter_input_priority,
+                            splitter_output_priority=entity.splitter_output_priority
+                        })
+                        bp.orig_splitters[j] = {
+                            splitter_input_priority = entity.splitter_input_priority,
+                            splitter_output_priority = entity.splitter_output_priority,
+                            splitter_filter = filter,
+                        }
                     end
                 end
             end

@@ -78,7 +78,7 @@ def fix_event(event):
             return [event, copy_event(event, x, y, player_index=6)]
         if player_index == 6 and x == 42.5 and y >= 135.5 and y <= 139.5:
             return [event, copy_event(event, x, y, player_index=4)]
-        if (x == 109.5 and y == 113) or (x == 108.5 and y == 114) or (x == 145.5 and y == 133):
+        if (x == 145.5 and y == 133):
             return [event, {'event_type': "set_splitter", 'name': "splitter", 'player_index': 4, 'position': {'x': x, 'y': y}, 'splitter_input_priority': "left", 'splitter_output_priority': "left", 'tick': tick, 'type': "splitter"}]
         if x == 329.5 and y == 229.5:
             event['direction'] = 2
