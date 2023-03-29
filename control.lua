@@ -2,6 +2,8 @@ local handler = require("event_handler")
 handler.add_lib(require("freeplay"))
 handler.add_lib(require("silo-script"))
 
+local generate_crafting_queues = false
+
 local player_cursor_stacks = {}
 local player_inventories = {
     [1] = {["burner-mining-drill"] = 1, ["stone-furnace"] = 1, wood = 1}
@@ -93,6 +95,17 @@ for i = 2,8 do
     last_position[i] = {0, 0}
 end
 
+script.on_event(defines.events.on_pre_ghost_deconstructed,
+    function(event)
+        slog({event_type="on_player_mined_entity",
+        tick=event.tick,
+        player_index=event.player_index,
+        position=event.ghost.position,
+        name=event.ghost.name,
+        type=event.ghost.type})
+        
+    end
+)
 
 script.on_event(defines.events.on_player_mined_entity,
     function(event)
@@ -564,25 +577,24 @@ end)
 script.on_event(defines.events.on_player_crafted_item,
     function(event)
         -- Disabled
-        if true then
-            return
-        end
-        local player = game.get_player(event.player_index)
-        if player.crafting_queue[1].prerequisite then
-            return
-        end
-        local real_craft = player.crafting_queue[1]
-        local crafting_queue = crafting_queues[event.player_index]
-        if crafting_queue[1].recipe ~= player.crafting_queue[1].recipe then
-            game.print('On craft, unexpectedly have craft for ' .. crafting_queue[1].recipe .. ' instead of ' .. real_craft.recipe .. ' for ' .. game.players[event.player_index].name)
-        end
-        crafting_queue[1].count = crafting_queue[1].count - 1
-        if crafting_queue[1].count == 0 then
-            table.remove(crafting_queue, 1)
-        end
+        if generate_crafting_queues then
+            local player = game.get_player(event.player_index)
+            if player.crafting_queue[1].prerequisite then
+                return
+            end
+            local real_craft = player.crafting_queue[1]
+            local crafting_queue = crafting_queues[event.player_index]
+            if crafting_queue[1].recipe ~= player.crafting_queue[1].recipe then
+                game.print('On craft, unexpectedly have craft for ' .. crafting_queue[1].recipe .. ' instead of ' .. real_craft.recipe .. ' for ' .. game.players[event.player_index].name)
+            end
+            crafting_queue[1].count = crafting_queue[1].count - 1
+            if crafting_queue[1].count == 0 then
+                table.remove(crafting_queue, 1)
+            end
 
-        if event.player_index == debug_player then
-            log(event.tick .. " craft " .. event.item_stack.count .. " " .. event.item_stack.name)
+            if event.player_index == debug_player then
+                log(event.tick .. " craft " .. event.item_stack.count .. " " .. event.item_stack.name)
+            end
         end
         local inv = player_inventories[event.player_index]
         if not inv[event.item_stack.name] then
@@ -595,27 +607,27 @@ script.on_event(defines.events.on_player_crafted_item,
 
 script.on_event(defines.events.on_pre_player_crafted_item,
     function(event)
-        -- Disabled
-        if true then
-            return
-        end
+
         local inv = player_inventories[event.player_index]
         local curs = player_cursor_stacks[event.player_index]
-        local products = event.recipe.products
-        if #products > 1 then
-            game.print('Recipe with multiple products: ' .. event.recipe.name)
+
+        if generate_crafting_queues then
+            local products = event.recipe.products
+            if #products > 1 then
+                game.print('Recipe with multiple products: ' .. event.recipe.name)
+            end
+            slog({event_type="on_pre_player_crafted_item", tick=event.tick, player_index=event.player_index,
+                queued_count=event.queued_count, product=products[1].name, amount=products[1].amount})
+            local real_crafting_queue = game.players[event.player_index].crafting_queue
+            local crafting_queue = crafting_queues[event.player_index]
+            local last_craft = real_crafting_queue[#real_crafting_queue]
+            if #crafting_queue > 0 and crafting_queue[#crafting_queue].recipe == event.recipe.name then
+                crafting_queue[#crafting_queue].count = crafting_queue[#crafting_queue].count + event.queued_count
+            else
+                table.insert(crafting_queue, {recipe=event.recipe.name, product=event.recipe.products[1].name, count=event.queued_count})
+            end
+            --reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, true)
         end
-        slog({event_type="on_pre_player_crafted_item", tick=event.tick, player_index=event.player_index,
-            queued_count=event.queued_count, product=products[1].name, amount=products[1].amount})
-        local real_crafting_queue = game.players[event.player_index].crafting_queue
-        local crafting_queue = crafting_queues[event.player_index]
-        local last_craft = real_crafting_queue[#real_crafting_queue]
-        if #crafting_queue > 0 and crafting_queue[#crafting_queue].recipe == event.recipe.name then
-            crafting_queue[#crafting_queue].count = crafting_queue[#crafting_queue].count + event.queued_count
-        else
-            table.insert(crafting_queue, {recipe=event.recipe.name, product=event.recipe.products[1].name, count=event.queued_count})
-        end
-        --reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, true)
 
         for i = 1,#event.items do
             local stack = event.items[i]
@@ -650,10 +662,7 @@ script.on_event(defines.events.on_pre_player_crafted_item,
 )
 
 function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, expect_same)
-    -- Disable this for now.
-    if true then
-        return
-    end
+
     if expect_same then
         -- full inventories boo
         return
@@ -687,7 +696,7 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
     end
 
     if #abr_real_queue < #crafting_queue - 1 then
-        --game.print('Cable cancel hit two different outputs?')
+        game.print('Cable cancel hit two different outputs?')
         return
     end
     if #abr_real_queue == #crafting_queue then
@@ -701,8 +710,8 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
                     return reconcile_crafting_queues(event, crafting_queue, abr_real_queue, true)
                 else
                     -- Full inventory probably
-                    --game.print('Gained item during cancel?')
-                    --dump_queue(event, abr_real_queue, crafting_queue)                
+                    game.print('Gained item during cancel?')
+                    dump_queue(event, abr_real_queue, crafting_queue)                
                 end
             end
         end
@@ -716,8 +725,8 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
                     return reconcile_crafting_queues(event, crafting_queue, abr_real_queue, true)
                 else
                     -- Full inventory probably
-                    --game.print('Gained item during cancel?')
-                    --dump_queue(event, abr_real_queue, crafting_queue)                
+                    game.print('Gained item during cancel?')
+                    dump_queue(event, abr_real_queue, crafting_queue)                
                 end
             end
         end
@@ -755,10 +764,6 @@ function reconcile_crafting_queues(event, crafting_queue, real_crafting_queue, e
 end
 
 function dump_queue(event, real_crafting_queue, crafting_queue)
-    -- Disabled
-    if true then
-        return
-    end
     if event.name == defines.events.on_player_cancelled_crafting then
         game.print('Error in cancel of ' .. event.cancel_count .. ' ' .. event.recipe.name .. ' for ' .. game.players[event.player_index].name)
     elseif event.name == defines.events.on_pre_player_crafted_item then
@@ -778,8 +783,7 @@ end
 
 script.on_event(defines.events.on_player_cancelled_crafting,
     function(event)
-        -- Disabled
-        if true then
+        if not generate_crafting_queues then
             return
         end
         local products = event.recipe.products
@@ -945,7 +949,8 @@ function(event)
     elseif player.opened_gui_type == defines.gui_type.entity then
         local opened = player.opened
         if opened.type == "container" or opened.type == "assembling-machine" or
-                opened.type == "rocket-silo" or opened.type == "beacon" or opened.type == "lab" then
+                opened.type == "rocket-silo" or opened.type == "beacon" or opened.type == "lab" or
+                opened.type == "boiler" then
             for name, count in pairs(lost_inv_items) do
                 emit_drop(event, opened, name, count)
             end

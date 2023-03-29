@@ -83,8 +83,8 @@ def fix_event(event):
         if x == 329.5 and y == 229.5:
             event['direction'] = 2
             return [event]
-        if x == 49.5 and y == -30:
-            return [event, {'count': 19, 'entity_name': "boiler", 'event_type': "player_dropped", 'item_name': "coal", 'player_index': 6, 'position': {'x': 49.5, 'y': -30}, 'tick': event['tick']},]
+        #if x == 49.5 and y == -30:
+        #    return [event, {'count': 19, 'entity_name': "boiler", 'event_type': "player_dropped", 'item_name': "coal", 'player_index': 6, 'position': {'x': 49.5, 'y': -30}, 'tick': event['tick']},]
 
     if event_type == 'on_player_rotated_entity':
         if player_index == 4 and x in (107.5, 108.5) and y in (139.5, 140.5):
@@ -205,6 +205,8 @@ def main():
                 f.write(unparse(event))
         f.write('}')
     shutil.copy(r'C:/Program Files/Factorio_1.1.78/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    # Crafting queue generation disabled for now.
+    return
     for player_index, craft_queue in craft_queues.items():
         squashed_queue = []
         for index, item in enumerate(craft_queue):
