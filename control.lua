@@ -646,25 +646,25 @@ end)
 
 script.on_event(defines.events.on_player_crafted_item,
     function(event)
-        -- Disabled
+        local player = game.get_player(event.player_index)
+        if player.crafting_queue[1].prerequisite then
+            return
+        end
         if generate_crafting_queues then
-            local player = game.get_player(event.player_index)
-            if player.crafting_queue[1].prerequisite then
-                return
-            end
             local real_craft = player.crafting_queue[1]
             local crafting_queue = crafting_queues[event.player_index]
             if crafting_queue[1].recipe ~= player.crafting_queue[1].recipe then
                 game.print('On craft, unexpectedly have craft for ' .. crafting_queue[1].recipe .. ' instead of ' .. real_craft.recipe .. ' for ' .. game.players[event.player_index].name)
             end
+            
             crafting_queue[1].count = crafting_queue[1].count - 1
             if crafting_queue[1].count == 0 then
                 table.remove(crafting_queue, 1)
             end
 
-            if event.player_index == debug_player then
-                log(event.tick .. " craft " .. event.item_stack.count .. " " .. event.item_stack.name)
-            end
+        end
+        if event.player_index == debug_player then
+            log(event.tick .. " craft " .. event.item_stack.count .. " " .. event.item_stack.name)
         end
         local inv = player_inventories[event.player_index]
         if not inv[event.item_stack.name] then
