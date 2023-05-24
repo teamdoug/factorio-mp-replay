@@ -31,7 +31,37 @@ def fix_event(event):
     event_type = event['event_type']
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
+    if (x == 280 and (y == 232.5 or y == 235.5)) and event_type == 'set_splitter':
+        event['splitter_output_priority'] = 'right'
+        event['splitter_input_priority'] = 'right'
+        return [event]
+    if event_type == 'on_built_entity':
+        name = event['name']
+        if x == 280.5 and y == 236.5:
+            event['direction'] = 4
+            return [event]
+        if x >= 154.5 and x <= 158.5 and y >= 264.5 and y <= 321.5:
+            return []
+        if x >= 160.5 and x <= 162.5 and y >= 265.5 and y <= 320.5 and name not in ('pipe-to-ground', 'pipe'):
+            return []
+        if x >= 154.5 and x <= 163.5 and y >= 322.5 and y <= 324.5:
+            return []
+        if x >= 158.5 and x <= 168.5 and y >= 325.5 and y <= 352.5 and y != 349.5:
+            return []
+        if x >= 117.5 and x <= 123.5 and y >= 327.5 and y <= 332.5:
+            return []
+        if x == 201.5 and y in (365.5, 368.5):
+            return []
+        if x in (205.5, 208.5) and y == 368.5:
+            return []
+        if x == 201.5 and y == -96.5 and name == 'entity-ghost':
+            return []
+    if event_type == 'on_marked_for_deconstruction':
+        if x >= 230.5 and x <= 237.5 and y >= 318.5 and y <= 323.5:
+            return []
+        
 
+    '''
     # This underground is later reversed by dragging belt, but there's no events for that...
     # Prevent initial accidental rotation
     if event_type == 'on_player_rotated_entity' and event['name'] == "underground-belt" and tick == 148729:
@@ -89,7 +119,7 @@ def fix_event(event):
     if event_type == 'on_player_rotated_entity':
         if player_index == 4 and x in (107.5, 108.5) and y in (139.5, 140.5):
             return []
-    '''
+
     # This underground is later reversed by dragging belt, but there's no events for that...
     # Prevent initial accidental rotation
     if event_type == 'on_player_rotated_entity' and event['name'] == "underground-belt" and tick == 96057:
