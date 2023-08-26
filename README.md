@@ -63,8 +63,9 @@ controls if your name is `heartosis`. You can update that to work for your playe
 First, make sure to grab the replay from the player who hosted the game. For other players,
 player indexes seem to jump around as players join, but I haven't tested this extensively.
 
-Then, copy the replay since you're going to modify it. Copy [control.lua](./control.lua) into
-the replay file, overwriting the existing control.lua.
+Then, copy the replay since you're going to modify it. Edit [control.lua](./control.lua)
+to change `player_mapping` to be the players in the order that they join the replay, then
+copy `control.lua` into the the replay file, overwriting the existing control.lua.
 
 Load the replay file and run through it as fast as your computer can handle. Stop when the
 rocket launches (or whenever you want bot actions to stop).

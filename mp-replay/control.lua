@@ -551,6 +551,8 @@ local rotate_entity = function(event)
     end
     if entity.type == "underground-belt" and event.belt_to_ground_type ~= entity.belt_to_ground_type then
         entity.rotate()
+    elseif entity.type == "entity-ghost" and entity.ghost_name == "underground-belt" and event.belt_to_ground_type ~= entity.belt_to_ground_type then
+        entity.rotate()
     else
         entity.direction = event.direction
     end

@@ -40,13 +40,13 @@ local player_names = {
 -- The order of players in the replay. Names don't need to match player_names.
 local player_mapping = {
     'JeHor',
-    'thedoh',
     'thePiedPiper',
-    'GlassBricks',
+    'thedoh',
     'Franqly',
     'heartosis',
-    'Phredward',
+    'GlassBricks',
     'mysticamber',
+    'Phredward',
 }
 
 local reverse_player_names = {}

@@ -31,6 +31,28 @@ def fix_event(event):
     event_type = event['event_type']
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
+    if event_type == 'on_built_entity':
+        name = event['name']
+
+        if x == 263.5 and y == 350.5 and name == 'underground-belt':
+            event['name'] = 'inserter'
+            event['direction'] = 6
+            return [event]
+        if x == 262.5 and y == 350.5 and name == 'transport-belt':
+            event['name'] = 'underground-belt'
+            event['belt_to_ground_type'] = 'input'
+            return [event]
+        if x == 226.5 and y == -89.5 and name == 'transport-belt':
+            return [event, copy_event(event, 226.5, -90.5)]
+        if x == 165.5 and y == 261 and name == 'splitter':
+            return [event, {'event_type': "set_splitter", 'name': "splitter", 'player_index': player_index, 'position': {'x': x, 'y': y}, 'filter': "utility-science-pack", 'splitter_output_priority': "right", 'tick': tick, 'type': "splitter"}]
+        if x == 210.5 and y == -96.5 and name == 'entity-ghost':
+            return []
+    if event_type == 'on_marked_for_deconstruction':
+        if x == 205.5 and y >= 355.5 and y <= 359.5:
+            return []
+
+    '''
     if (x == 280 and (y == 232.5 or y == 235.5)) and event_type == 'set_splitter':
         event['splitter_output_priority'] = 'right'
         event['splitter_input_priority'] = 'right'
@@ -59,7 +81,7 @@ def fix_event(event):
     if event_type == 'on_marked_for_deconstruction':
         if x >= 230.5 and x <= 237.5 and y >= 318.5 and y <= 323.5:
             return []
-        
+        '''
 
     '''
     # This underground is later reversed by dragging belt, but there's no events for that...
@@ -189,7 +211,7 @@ craft_queues = {i+1: [] for i in range(8)}
 def main():
     with open('replay.log') as f:
         text = f.read()
-    with open(r'C:/Program Files/Factorio_1.1.78/mods/mp-replay/player_events.lua', 'w') as f:
+    with open(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'w') as f:
         f.write('return {')
         first = True
         for line in text.splitlines():
@@ -234,7 +256,7 @@ def main():
                     f.write(',\n')
                 f.write(unparse(event))
         f.write('}')
-    shutil.copy(r'C:/Program Files/Factorio_1.1.78/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    shutil.copy(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
     # Crafting queue generation disabled for now.
     return
     for player_index, craft_queue in craft_queues.items():
