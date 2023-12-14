@@ -6,14 +6,14 @@ local debug = false
 
 
 local player_names = {
+    'JeHor',
+    'Phredward',
+    'heartosis',
     'Franqly',
     'GlassBricks',
-    'heartosis',
-    'JeHor',
-    'mysticamber',
-    'Phredward',
+    'thePiedPiper',
     'thedoh',
-    'thePiedPiper'
+    'NapoleonBonerfart',
 }
 
 
@@ -771,10 +771,10 @@ script.on_event(defines.events.on_tick, function(tick_event)
     -- jehor, remove 8 iron plate.
     if global.tick >= 1 and global.real_last_tick < 1 then
         for index, player in pairs(game.players) do
-            if index == 1 and global.current_player_map[index] ~= 4 then
+            if index == 1 and global.current_player_map[index] ~= 1 then
                 player.get_main_inventory().insert({name="iron-plate", count=8})
             end
-            if index ~= 1 and global.current_player_map[index] == 4 then
+            if index ~= 1 and global.current_player_map[index] == 1 then
                 player.get_main_inventory().remove({name="iron-plate", count=8})
             end
         end

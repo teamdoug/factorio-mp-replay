@@ -27,26 +27,26 @@ local debug_player = 0
 -- The order players are in your planning docs.
 -- Needs to match mp-replay/control.lua's player_names.
 local player_names = {
+    'JeHor',
+    'Phredward',
+    'heartosis',
     'Franqly',
     'GlassBricks',
-    'heartosis',
-    'JeHor',
-    'mysticamber',
-    'Phredward',
+    'thePiedPiper',
     'thedoh',
-    'thePiedPiper'
+    'mysticamber',
 }
 
 -- The order of players in the replay. Names don't need to match player_names.
 local player_mapping = {
     'JeHor',
     'thePiedPiper',
-    'thedoh',
     'Franqly',
     'heartosis',
     'GlassBricks',
-    'mysticamber',
+    'thedoh',
     'Phredward',
+    'mysticamber',
 }
 
 local reverse_player_names = {}
@@ -78,6 +78,9 @@ local next_log_tick = 0
 local p2
 
 local function slog(ltable)
+    if ltable.event_type ~= "on_player_changed_position" then
+        --game.print(serpent.line(ltable))
+    end
     if ltable.player_index then
         ltable.player_index = reverse_player_names[player_mapping[ltable.player_index]]
     end
@@ -877,6 +880,9 @@ script.on_event(defines.events.on_player_cancelled_crafting,
 
 script.on_event({defines.events.on_player_main_inventory_changed, defines.events.on_player_cursor_stack_changed, defines.events.on_player_fast_transferred},
 function(event)
+    --if event.tick == 247 then
+      --  game.print(serpent.line(event))
+    --end
     -- we could actually use the info on fast transfer events...
     local old_inv = player_inventories[event.player_index]
     local player = game.get_player(event.player_index)
@@ -884,6 +890,7 @@ function(event)
     cur_inv = cur_inv.get_contents()
     local new_inv_items = {}
     local lost_inv_items = {}
+    --game.print(serpent.line(event))
     if event.player_index == debug_player then
         log("old_inv " .. serpent.line(old_inv))
     end
@@ -998,6 +1005,9 @@ function(event)
     end
 
     if player.selected and player.selected.type ~= "resource" then
+        if event.player_index == debug_player then
+            log("player selected")
+        end
         for name, count in pairs(lost_inv_items) do
             if player.selected.name == "character" then
                 slog({event_type="player_gave",
@@ -1017,6 +1027,9 @@ function(event)
             emit_take(event, player.selected, name, count)
         end
     elseif player.opened_gui_type == defines.gui_type.entity then
+        if event.player_index == debug_player then
+            log("open gui")
+        end
         local opened = player.opened
         if opened.type == "container" or opened.type == "assembling-machine" or
                 opened.type == "rocket-silo" or opened.type == "beacon" or opened.type == "lab" or
@@ -1029,6 +1042,10 @@ function(event)
             end
         end
     else
+        if event.player_index == debug_player then
+            log("oops?")
+            log("gui .. " .. player.opened_gui_type)
+        end
         -- dropping on ground?
     end
 

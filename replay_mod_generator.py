@@ -33,24 +33,31 @@ def fix_event(event):
     x, y = event['position']['x'], event['position']['y']
     if event_type == 'on_built_entity':
         name = event['name']
-
-        if x == 263.5 and y == 350.5 and name == 'underground-belt':
-            event['name'] = 'inserter'
+        if x == 202.5 and y == -96.5 and name == 'entity-ghost':
+            return []
+        if x == 268.5 and y == 131.5:
+            event['belt_to_ground_type'] = "output"
             event['direction'] = 6
             return [event]
-        if x == 262.5 and y == 350.5 and name == 'transport-belt':
-            event['name'] = 'underground-belt'
-            event['belt_to_ground_type'] = 'input'
+        if x == 270.5 and y == 131.5:
+            event['belt_to_ground_type'] = "input"
+            event['direction'] = 6
             return [event]
-        if x == 226.5 and y == -89.5 and name == 'transport-belt':
-            return [event, copy_event(event, 226.5, -90.5)]
-        if x == 165.5 and y == 261 and name == 'splitter':
-            return [event, {'event_type': "set_splitter", 'name': "splitter", 'player_index': player_index, 'position': {'x': x, 'y': y}, 'filter': "utility-science-pack", 'splitter_output_priority': "right", 'tick': tick, 'type': "splitter"}]
-        if x == 210.5 and y == -96.5 and name == 'entity-ghost':
-            return []
+        if x == 192.5 and y == 359.5:
+            event['belt_to_ground_type'] = "output"
+            event['direction'] = 6
+            return [event]
+        if x == 197.5 and y == 359.5:
+            event['belt_to_ground_type'] = "input"
+            event['direction'] = 6
+            return [event]
     if event_type == 'on_marked_for_deconstruction':
-        if x == 205.5 and y >= 355.5 and y <= 359.5:
+        if x == 163.5 and y == 257.5:
             return []
+        if x == 198 and y == 356:
+            return []
+
+    return [event]
 
     '''
     if (x == 280 and (y == 232.5 or y == 235.5)) and event_type == 'set_splitter':
