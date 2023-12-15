@@ -27,14 +27,14 @@ local debug_player = 0
 -- The order players are in your planning docs.
 -- Needs to match mp-replay/control.lua's player_names.
 local player_names = {
-    'JeHor',
-    'Phredward',
-    'heartosis',
     'Franqly',
     'GlassBricks',
-    'thePiedPiper',
-    'thedoh',
+    'heartosis',
+    'JeHor',
     'mysticamber',
+    'Phredward',
+    'thedoh',
+    'thePiedPiper'
 }
 
 -- The order of players in the replay. Names don't need to match player_names.
