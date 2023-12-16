@@ -31,6 +31,9 @@ def fix_event(event):
     event_type = event['event_type']
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
+    if event_type != 'on_player_changed_position':
+        if x >= 73 and x <= 89 and y >= 1 and y <= 11:
+            event['position']['x'] += 1
     if event_type == 'on_built_entity':
         name = event['name']
         if x == 202.5 and y == -96.5 and name == 'entity-ghost':
@@ -38,19 +41,16 @@ def fix_event(event):
         if x == 268.5 and y == 131.5:
             event['belt_to_ground_type'] = "output"
             event['direction'] = 6
-            return [event]
         if x == 270.5 and y == 131.5:
             event['belt_to_ground_type'] = "input"
             event['direction'] = 6
-            return [event]
         if x == 192.5 and y == 359.5:
             event['belt_to_ground_type'] = "output"
             event['direction'] = 6
-            return [event]
         if x == 197.5 and y == 359.5:
             event['belt_to_ground_type'] = "input"
             event['direction'] = 6
-            return [event]
+
     if event_type == 'on_marked_for_deconstruction':
         if x == 163.5 and y == 257.5:
             return []
