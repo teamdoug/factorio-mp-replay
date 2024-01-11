@@ -38,6 +38,8 @@ def fix_event(event):
         return []
     if x in (73.5, 79.5) and y == -3.5 and player_index == 6 and event_type != 'on_built_entity':
         return []
+    if x == 73.5 and tick in (18064, 19396):
+        event['position']['x'] = 79.5
     if event_type in ('on_built_entity', 'on_player_mined_entity'):
         if x == 73.5 and y == -4.5:
             event['position']['y'] += 1
