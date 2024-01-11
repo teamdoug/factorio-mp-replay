@@ -34,10 +34,36 @@ def fix_event(event):
     if event_type != 'on_player_changed_position':
         if x >= 73 and x <= 89 and y >= 1 and y <= 11:
             event['position']['x'] += 1
+    if x == 73.5 and y == -4.5 and event_type == 'on_player_mined_entity':
+        return []
+    if x in (73.5, 79.5) and y == -3.5 and player_index == 6 and event_type != 'on_built_entity':
+        return []
+    if event_type in ('on_built_entity', 'on_player_mined_entity'):
+        if x == 73.5 and y == -4.5:
+            event['position']['y'] += 1
+        if player_index == 8 and x >= 186.5 and x <= 210.5 and y >= 291.5 and y <= 311.5:
+            event['position']['x'] -= 1
+        if player_index == 8 and x >= 203.5 and x <= 204.5 and y >= 283.5 and y <= 289.5:
+            event['position']['x'] -= 1
+        if x == 215.5 and y in (299.5, 300.5, 301.5, 294.5, 295.5, 296.5):
+            return [event, copy_event(event, x-4, y)]
+        if x == 189.5 and y == 310.5:
+            return []
+        if x == 190.5 and y == 310.5:
+            event['position']['x'] -= 1
+        if x == 189.5 and y == 311.5:
+            return []
+        if x == 190.5 and y == 311.5:
+            event['position']['x'] -= 1
+        if player_index == 7 and x == 200.5 and y == 311.5:
+            return []
+
     if event_type == 'on_built_entity':
         name = event['name']
         if x == 202.5 and y == -96.5 and name == 'entity-ghost':
             return []
+        if x == 230.5 and y == 349.5:
+            return [event, copy_event(event, x, y, player_index=8)]
         if x == 268.5 and y == 131.5:
             event['belt_to_ground_type'] = "output"
             event['direction'] = 6
