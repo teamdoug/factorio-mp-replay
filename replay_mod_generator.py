@@ -27,10 +27,14 @@ def unparse(obj):
 def fix_event(event):
     if 'position' not in event:
         return [event]
+
+
     player_index = event['player_index']
     event_type = event['event_type']
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
+    
+    '''
     if event_type != 'on_player_changed_position':
         if x >= 73 and x <= 89 and y >= 1 and y <= 11:
             event['position']['x'] += 1
@@ -86,7 +90,7 @@ def fix_event(event):
             return []
 
     return [event]
-
+    '''
     '''
     if (x == 280 and (y == 232.5 or y == 235.5)) and event_type == 'set_splitter':
         event['splitter_output_priority'] = 'right'
@@ -246,7 +250,7 @@ craft_queues = {i+1: [] for i in range(8)}
 def main():
     with open('replay.log') as f:
         text = f.read()
-    with open(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'w') as f:
+    with open(r'player_events.lua', 'w') as f:
         f.write('return {')
         first = True
         for line in text.splitlines():
@@ -291,7 +295,10 @@ def main():
                     f.write(',\n')
                 f.write(unparse(event))
         f.write('}')
-    shutil.copy(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    
+    # next line commented out by JeHor
+    # shutil.copy(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    
     # Crafting queue generation disabled for now.
     return
     for player_index, craft_queue in craft_queues.items():
