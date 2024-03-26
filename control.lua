@@ -27,31 +27,38 @@ local debug_player = 0
 -- The order players are in your planning docs.
 -- Needs to match mp-replay/control.lua's player_names.
 local player_names = {
+    'JeHor',
+    'Phredward',
+    'heartosis',
     'Franqly',
     'GlassBricks',
-    'heartosis',
-    'JeHor',
-    'mysticamber',
-    'Phredward',
+    'thePiedPiper',
     'thedoh',
-    'thePiedPiper'
+    'NapoleonBonerfart',
 }
 
 -- The order of players in the replay. Names don't need to match player_names.
 local player_mapping = {
     'JeHor',
+    'Phredward',
     'thePiedPiper',
-    'Franqly',
-    'heartosis',
     'GlassBricks',
     'thedoh',
-    'Phredward',
-    'mysticamber',
+    'heartosis',
+    'Franqly',
+    'NapoleonBonerfart',
 }
 
 local reverse_player_names = {}
 for i, name in ipairs(player_names) do
 	reverse_player_names[name] = i
+end
+
+-- checking for spelling mistakes between player_names and player_mapping
+for _, name in ipairs(player_mapping) do
+    if reverse_player_names[name] == nil then
+        error("Spelling error in player_names or player_mapping for " .. name)
+    end
 end
 
 -- Entities we set recipes on. Yeesh. I guess entity.type isn't set on bps?
