@@ -605,6 +605,18 @@ local set_inserter_filter = function(event)
     return true
 end
 
+local set_bar = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil or entity.get_inventory(defines.inventory.chest) == nil then
+        if debug then
+            game.print("failed to set bar " .. event.bar .. " at " .. event.position)
+        end
+        return false
+    end
+    entity.get_inventory(defines.inventory.chest).set_bar(event.bar)
+    return true
+end
+
 local scale_color = function(color, alpha)
     return {color[1] * alpha, color[2] * alpha, color[3] * alpha, alpha}
 end
@@ -648,7 +660,8 @@ local build_entity = function(event)
         type = event.belt_to_ground_type,
         bar = event.bar,
         stack = event.stack,
-        inner_name = event.ghost_name
+        inner_name = event.ghost_name,
+        filters = {event.filter},
     }
     if entity and global.track_players then
         local b = entity.selection_box
@@ -715,6 +728,19 @@ local on_marked_for_deconstruction = function(event)
         return true
     end
     entity.order_deconstruction(game.forces.player)
+    return true
+end
+
+local on_cancelled_deconstruction = function(event)
+    local entity = game.surfaces["nauvis"].find_entity(event.name, event.position)
+    if entity == nil or entity.type ~= event.type then
+        if debug then
+            game.print("failed to cancel deconstruct entity at " .. event.position)
+        end
+        -- It's already deconstructed??
+        return true
+    end
+    entity.cancel_deconstruction(game.forces.player)
     return true
 end
 
@@ -832,6 +858,8 @@ script.on_event(defines.events.on_tick, function(tick_event)
                     noerr, success = pcall(set_splitter, event)
                 elseif event.event_type == "set_inserter_filter" then
                     noerr, success = pcall(set_inserter_filter, event)
+                elseif event.event_type == "set_bar" then
+                    noerr, success = pcall(set_bar, event)
                 elseif event.event_type == "on_research_started" then
                     noerr, success = pcall(on_research_started, event)
                 elseif event.event_type == "on_player_changed_position" then
@@ -840,6 +868,8 @@ script.on_event(defines.events.on_tick, function(tick_event)
                     noerr, success = pcall(on_player_flushed_fluid, event)
                 elseif event.event_type == "on_marked_for_deconstruction" then
                     noerr, success = pcall(on_marked_for_deconstruction, event)
+                elseif event.event_type == "on_cancelled_deconstruction" then
+                    noerr, success = pcall(on_cancelled_deconstruction, event)
                 elseif event.event_type == "on_picked_up_item" then
                     noerr, success = pcall(on_picked_up_item, event)
                 else

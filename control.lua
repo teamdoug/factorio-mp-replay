@@ -77,6 +77,10 @@ local container_entities = {
 local splitter_entities = {
     ["splitter"] = true,
 }
+-- Entities we set filters on.
+local filter_entities = {
+    ["filter-inserter"]= true,
+}
 
 local player_bps = {}
 
@@ -85,9 +89,6 @@ local next_log_tick = 0
 local p2
 
 local function slog(ltable)
-    if ltable.event_type ~= "on_player_changed_position" then
-        --game.print(serpent.line(ltable))
-    end
     if ltable.player_index then
         ltable.player_index = reverse_player_names[player_mapping[ltable.player_index]]
     end
@@ -149,6 +150,9 @@ script.on_event(defines.events.on_built_entity,
         if ce.type == "entity-ghost" then
             e.ghost_name = ce.ghost_name
             type = ce.ghost_type
+            if type == "inserter" and ce.filter_slot_count > 0 and ce.get_filter(1) ~= nil then
+                e.filter = ce.get_filter(1)
+            end
         end
         if type == "underground-belt" then
             e.belt_to_ground_type = ce.belt_to_ground_type
@@ -179,6 +183,11 @@ script.on_event(defines.events.on_built_entity,
                     end
                     if bar and ce.type == "container" then
                         bp.orig_bars[j] = ce.get_inventory(defines.inventory.chest).get_bar()
+                    end
+                    if ce.get_filter(1) ~= nil then
+                        bp.orig_filters[j] = {
+                            filter = ce.get_filter(1),
+                        }
                     end
                 end
             end
@@ -224,6 +233,19 @@ script.on_event(defines.events.on_player_rotated_entity,
     end
 )
 
+local bars = {}
+
+script.on_event(defines.events.on_gui_opened,
+    function(event)
+        if event.gui_type ~= defines.gui_type.entity then
+            return
+        end
+        if event.entity.type == "container" then
+            local inv = event.entity.get_inventory(defines.inventory.chest)
+            bars[event.entity.unit_number] = inv.get_bar()
+        end
+    end
+)
 
 script.on_event(defines.events.on_gui_closed,
 function(event)
@@ -260,6 +282,19 @@ function(event)
             name=event.entity.name,
             type=event.entity.type,
             filter=filter})
+        elseif event.entity.type == "container" then
+            local inv = event.entity.get_inventory(defines.inventory.chest)
+            if bars[event.entity.unit_number] ~= inv.get_bar() then
+                bars[event.entity.unit_number] = inv.get_bar()
+                slog({event_type="set_bar",
+                    tick=event.tick,
+                    player_index=event.player_index,
+                    position=event.entity.position,
+                    name=event.entity.name,
+                    type=event.entity.type,
+                    bar=inv.get_bar(),
+                })
+            end
         end
     end
 end
@@ -429,9 +464,9 @@ script.on_event(defines.events.on_tick, function(event)
         end
         last_underground_belt_entity = nil
     end
-    -- Rate limit position updates to twice a second
     for i = 1,8 do
         local player = game.get_player(i)
+        -- Rate limit position updates to twice a second
         if player and player.character and event.tick > last_moved[i] + 30 then
             if last_position[i][1] ~= player.position.x or last_position[i][2] ~= player.position.y then 
                 --local p2 = game.create_profiler()
@@ -496,6 +531,8 @@ script.on_event(defines.events.on_tick, function(event)
                             game.print(name .. ': ' .. serpent.line(val))
                         end
                         ]]
+                    elseif filter_entities[entity.name] then
+                        have_entities[entity.name] = entity.name
                     end
                 end
                 if next(have_entities) then
@@ -504,6 +541,7 @@ script.on_event(defines.events.on_tick, function(event)
                     local orig_bars = {}
                     local orig_directions = {}
                     local orig_splitters = {}
+                    local orig_filters = {}
                     for j, entity in ipairs(entities) do
                         if entity.type == "assembling-machine" then
                             orig_recipes[j] = entity.get_recipe() and entity.get_recipe().name
@@ -521,10 +559,16 @@ script.on_event(defines.events.on_tick, function(event)
                                 orig_splitters[j].splitter_filter = entity.splitter_filter.name
                             end
                         end
+                        if entity.name == "filter-inserter" then
+                            -- Only track the first filter slot
+                            orig_filters[j] = {
+                                filter = entity.get_filter(1),
+                            }
+                        end
                     end
                     player_bps[i] = {entities = entities, item_number = player.cursor_stack.item_number, bar = bar, splitter_setting = splitter_setting,
                         have_recipes = have_recipes, have_entities = have_entities, orig_bars = orig_bars, orig_recipes = orig_recipes,
-                        orig_directions = orig_directions, orig_splitters = orig_splitters}
+                        orig_directions = orig_directions, orig_splitters = orig_splitters, orig_filters = orig_filters}
                     --log("bp")
                     --log(serpent.line(player_bps[i]))
                 else
@@ -598,6 +642,20 @@ script.on_event(defines.events.on_tick, function(event)
                             splitter_input_priority = entity.splitter_input_priority,
                             splitter_output_priority = entity.splitter_output_priority,
                             splitter_filter = filter,
+                        }
+                    end
+                elseif entity.name == "filter-inserter" and bp.orig_filters[j] then
+                    local filter = entity.get_filter(1)
+                    if bp.orig_filters[j].filter ~= filter then
+                        slog({event_type="set_inserter_filter",
+                        tick=event.tick,
+                        player_index=i,
+                        position=entity.position,
+                        name=entity.name,
+                        type=entity.type,
+                        filter=filter})
+                        bp.orig_filters[j] = {
+                            filter = filter
                         }
                     end
                 end
@@ -1078,7 +1136,18 @@ function(event)
 end
 )
 
-script.on_event(defines.events.on_marked_for_deconstruction ,
+script.on_event(defines.events.on_cancelled_deconstruction,
+function(event)
+    slog({event_type="on_cancelled_deconstruction",
+    tick=event.tick,
+    player_index=event.player_index,
+    position=event.entity.position,
+    name=event.entity.name,
+    type=event.entity.type})
+end
+)
+
+script.on_event(defines.events.on_marked_for_deconstruction,
 function(event)
     slog({event_type="on_marked_for_deconstruction",
     tick=event.tick,

@@ -1,3 +1,4 @@
+import os
 import csv
 import shutil
 import filter_replay
@@ -250,7 +251,8 @@ craft_queues = {i+1: [] for i in range(8)}
 def main():
     with open('replay.log') as f:
         text = f.read()
-    with open(r'player_events.lua', 'w') as f:
+    mod_file_path = 'mp-replay/player_events.lua'
+    with open(mod_file_path, 'w') as f:
         f.write('return {')
         first = True
         for line in text.splitlines():
@@ -296,8 +298,9 @@ def main():
                 f.write(unparse(event))
         f.write('}')
     
-    # next line commented out by JeHor
-    # shutil.copy(r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua', 'mp-replay/player_events.lua')
+    path = r'C:/Users/Doug/AppData/Roaming/Factorio/mods/mp-replay/player_events.lua'
+    if os.path.exists(path):
+        shutil.copy(mod_file_path, path)
     
     # Crafting queue generation disabled for now.
     return
