@@ -4,12 +4,15 @@ import shutil
 import filter_replay
 import copy
 
-def copy_event(event, x, y, player_index=None):
+def copy_event(event, x=None, y=None, player_index=None, **kwargs):
     ev = copy.deepcopy(event)
-    ev['position']['x'] = x
-    ev['position']['y'] = y
+    if x is not None:
+        ev['position']['x'] = x
+    if y is not None:
+        ev['position']['y'] = y
     if player_index is not None:
         ev['player_index'] = player_index
+    ev.update(kwargs)
     return ev
 
 def unparse(obj):
@@ -58,7 +61,25 @@ def fix_event(event):
     if event_type == "player_dropped" and tick == 245197 and event['item_name'] == 'productivity-module-3':
         return []
 
-    # That was a lot of code to fix "one" mistake. Easier to hack the player_events.lua file. :)
+    if x == 376.5 and y == 209.5:
+        if tick != 156441:
+            if event_type == "on_built_entity" and event['name'] == "underground-belt":
+                return [copy_event(event, x, y-2)]
+            if event_type == "on_player_mined_entity" and event["tick"] == 159258:
+                return [copy_event(event, x, y-2)]
+            return []
+
+    if event_type == "on_built_entity":
+        if x >= 353 and y >= 205 and y <= 209 and x <= 375 and event['name'] == "inserter":
+            if tick < 190000:
+                return [copy_event(event, direction=4)]
+            return []
+        if x == 101.5 and y == 241.5:
+            return [event, copy_event(event, 101.5, 242.5)]
+    if x == 313.5 and y in (141.5, 144.5):
+        if event.get('name') not in ('assembling-machine-1', 'entity-ghost'):
+            return []
+        return [copy_event(event, recipe="electronic-circuit")]
 
     '''
     if event_type != 'on_player_changed_position':
