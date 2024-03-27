@@ -35,6 +35,31 @@ def fix_event(event):
     tick = event['tick']
     x, y = event['position']['x'], event['position']['y']
     
+
+    # fixes for 1h09m38s run on March 18, 2024 below
+
+    # fixing speeds in rocket silo
+    if event_type == "player_dropped" and tick == 244946 and event['item_name'] == 'productivity-module-3':
+        event['count'] = 4
+        return [event]
+
+    if event_type == "player_dropped" and tick == 244946 and event['item_name'] == 'speed-module':
+        return []
+
+    if event_type == "player_took" and tick == 245007 and event['item_name'] == 'speed-module':
+        return []    
+
+    if event_type == "player_dropped" and tick == 245029 and event['item_name'] == 'speed-module':
+        return []
+
+    if event_type == "player_took" and tick == 245098 and event['item_name'] == 'speed-module':
+        return [] 
+
+    if event_type == "player_dropped" and tick == 245197 and event['item_name'] == 'productivity-module-3':
+        return []
+
+    # That was a lot of code to fix "one" mistake. Easier to hack the player_events.lua file. :)
+
     '''
     if event_type != 'on_player_changed_position':
         if x >= 73 and x <= 89 and y >= 1 and y <= 11:
