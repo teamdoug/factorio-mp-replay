@@ -40,7 +40,7 @@ def fix_event(event):
     
 
     # fixes for 1h09m38s run on March 18, 2024 below
-
+    '''
     # fixing speeds in rocket silo
     if event_type == "player_dropped" and tick == 244946 and event['item_name'] == 'productivity-module-3':
         event['count'] = 4
@@ -80,7 +80,7 @@ def fix_event(event):
         if event.get('name') not in ('assembling-machine-1', 'entity-ghost'):
             return []
         return [copy_event(event, recipe="electronic-circuit")]
-
+    '''
     '''
     if event_type != 'on_player_changed_position':
         if x >= 73 and x <= 89 and y >= 1 and y <= 11:

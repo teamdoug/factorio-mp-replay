@@ -37,29 +37,15 @@ local player_names = {
     'NapoleonBonerfart',
 }
 
--- The order of players in the replay. Names don't need to match player_names.
-local player_mapping = {
-    'JeHor',
-    'Phredward',
-    'thePiedPiper',
-    'GlassBricks',
-    'thedoh',
-    'heartosis',
-    'Franqly',
-    'NapoleonBonerfart',
-}
-
 local reverse_player_names = {}
 for i, name in ipairs(player_names) do
-	reverse_player_names[name] = i
+    reverse_player_names[name] = i
 end
 
--- checking for spelling mistakes between player_names and player_mapping
-for _, name in ipairs(player_mapping) do
-    if reverse_player_names[name] == nil then
-        error("Spelling error in player_names or player_mapping for " .. name)
-    end
-end
+-- Map a player's game index to their planning index. Built on demand
+-- and will error if an unknown player is in the game.
+local player_mapping = {
+}
 
 -- Entities we set recipes on. Yeesh. I guess entity.type isn't set on bps?
 local assembler_entities = {
@@ -88,12 +74,26 @@ local message_buffer = {}
 local next_log_tick = 0
 local p2
 
+local function map_player(index)
+    local mapped_index = player_mapping[index]
+    if mapped_index ~= nil then
+        return mapped_index
+    end
+    local name = game.players[index].name
+    mapped_index = reverse_player_names[name]
+    if mapped_index == nil then
+        game.print('Unknown player ' .. name)
+        return 1
+    end
+    return mapped_index
+end
+
 local function slog(ltable)
     if ltable.player_index then
-        ltable.player_index = reverse_player_names[player_mapping[ltable.player_index]]
+        ltable.player_index = map_player(ltable.player_index)
     end
     if ltable.to_player_index then
-        ltable.to_player_index = reverse_player_names[player_mapping[ltable.to_player_index]]
+        ltable.to_player_index = map_player(ltable.to_player_index)
     end
     table.insert(message_buffer, serpent.line(ltable))
     if #message_buffer >= 50 then
@@ -150,8 +150,15 @@ script.on_event(defines.events.on_built_entity,
         if ce.type == "entity-ghost" then
             e.ghost_name = ce.ghost_name
             type = ce.ghost_type
-            if type == "inserter" and ce.filter_slot_count > 0 and ce.get_filter(1) ~= nil then
-                e.filter = ce.get_filter(1)
+            if type == "inserter" and ce.filter_slot_count > 0 then
+                local filter = ce.get_filter(1)
+                if filter == nil then
+                    filter = ce.get_filter(2)
+                end
+                if filter ~= nil then
+                    e.filter = filter
+                    e.inserter_filter_mode = ce.inserter_filter_mode
+                end
             end
         end
         if type == "underground-belt" then
@@ -184,9 +191,14 @@ script.on_event(defines.events.on_built_entity,
                     if bar and ce.type == "container" then
                         bp.orig_bars[j] = ce.get_inventory(defines.inventory.chest).get_bar()
                     end
-                    if ce.get_filter(1) ~= nil then
+                    local filter = ce.get_filter(1)
+                    if filter == nil then
+                        filter = ce.get_filter(2)
+                    end
+                    if filter ~= nil then
                         bp.orig_filters[j] = {
-                            filter = ce.get_filter(1),
+                            filter = filter,
+                            inserter_filter_mode = ce.inserter_filter_mode,
                         }
                     end
                 end
@@ -281,7 +293,9 @@ function(event)
             position=event.entity.position,
             name=event.entity.name,
             type=event.entity.type,
-            filter=filter})
+            filter=filter,
+            inserter_filter_mode=event.entity.inserter_filter_mode,
+        })
         elseif event.entity.type == "container" then
             local inv = event.entity.get_inventory(defines.inventory.chest)
             if bars[event.entity.unit_number] ~= inv.get_bar() then
@@ -560,9 +574,14 @@ script.on_event(defines.events.on_tick, function(event)
                             end
                         end
                         if entity.name == "filter-inserter" then
-                            -- Only track the first filter slot
+                            -- Only track the first two filter slots, and only use one of them
+                            local filter = entity.get_filter(1)
+                            if filter == nil then
+                                filter = entity.get_filter(2)
+                            end
                             orig_filters[j] = {
-                                filter = entity.get_filter(1),
+                                filter = filter,
+                                inserter_filter_mode  = entity.inserter_filter_mode,
                             }
                         end
                     end
@@ -646,16 +665,23 @@ script.on_event(defines.events.on_tick, function(event)
                     end
                 elseif entity.name == "filter-inserter" and bp.orig_filters[j] then
                     local filter = entity.get_filter(1)
-                    if bp.orig_filters[j].filter ~= filter then
+                    if filter == nil then
+                        filter = entity.get_filter(2)
+                    end
+                    local inserter_filter_mode = entity.inserter_filter_mode
+                    if bp.orig_filters[j].filter ~= filter or bp.orig_filters[j].inserter_filter_mode ~= inserter_filter_mode then
                         slog({event_type="set_inserter_filter",
                         tick=event.tick,
                         player_index=i,
                         position=entity.position,
                         name=entity.name,
                         type=entity.type,
-                        filter=filter})
+                        filter=filter,
+                        inserter_filter_mode = inserter_filter_mode,
+                    })
                         bp.orig_filters[j] = {
-                            filter = filter
+                            filter = filter,
+                            inserter_filter_mode = inserter_filter_mode,
                         }
                     end
                 end
@@ -701,13 +727,16 @@ script.on_event(defines.events.on_entity_settings_pasted, function(event)
         if filter == nil then
             filter = event.destination.get_filter(2)
         end
-        slog({event_type="set_inserter_filter",
-        tick=event.tick,
-        player_index=event.player_index,
-        position=event.destination.position,
-        name=event.destination.name,
-        type=event.destination.type,
-        filter=filter})
+        slog({
+            event_type="set_inserter_filter",
+            tick=event.tick,
+            player_index=event.player_index,
+            position=event.destination.position,
+            name=event.destination.name,
+            type=event.destination.type,
+            filter=filter,
+            inserter_filter_mode=event.destination.inserter_filter_mode,
+        })
     end
 end)
 

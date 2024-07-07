@@ -602,6 +602,9 @@ local set_inserter_filter = function(event)
     if event.filter then
         entity.set_filter(2, event.filter)
     end
+    if event.inserter_filter_mode then
+        entity.inserter_filter_mode = event.inserter_filter_mode
+    end
     return true
 end
 
